@@ -1,0 +1,18 @@
+database:
+  enabled: true
+  type: mariadb
+  host: 127.0.0.1
+  port: 3306
+  name: mahjongpaper
+  username: root
+  password: change_me
+  parameters: useUnicode=true&characterEncoding=utf8&useSsl=false
+  h2:
+    path: data/mahjongpaper
+    username: sa
+    password: ""
+    parameters: MODE=MariaDB;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+  pool:
+    maximumPoolSize: 10
+    minimumIdle: 2
+    connectionTimeoutMillis: 10000

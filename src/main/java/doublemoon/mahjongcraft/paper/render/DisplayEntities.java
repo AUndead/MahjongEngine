@@ -16,10 +16,15 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
+import java.util.Collection;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class DisplayEntities {
     private static final String ITEM_MODEL_NAMESPACE = "mahjongcraft";
     private static final float TILE_SCALE = 0.15F;
+    private static final Map<String, ItemStack> TILE_ITEM_CACHE = new ConcurrentHashMap<>();
 
     private DisplayEntities() {
     }
@@ -32,6 +37,19 @@ public final class DisplayEntities {
         boolean faceDown,
         DisplayClickAction clickAction,
         boolean visibleByDefault
+    ) {
+        return spawnTileDisplay(plugin, location, yaw, tile, faceDown, clickAction, visibleByDefault, null);
+    }
+
+    public static ItemDisplay spawnTileDisplay(
+        Plugin plugin,
+        Location location,
+        float yaw,
+        MahjongTile tile,
+        boolean faceDown,
+        DisplayClickAction clickAction,
+        boolean visibleByDefault,
+        Collection<UUID> privateViewers
     ) {
         World world = location.getWorld();
         if (world == null) {
@@ -66,30 +84,46 @@ public final class DisplayEntities {
         if (clickAction != null) {
             TableDisplayRegistry.register(display.getEntityId(), clickAction);
         }
+        if (privateViewers != null && !privateViewers.isEmpty()) {
+            DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+        }
         return display;
     }
 
     public static TextDisplay spawnLabel(Location location, Component text, Color color) {
+        return spawnLabel(location, text, color, null);
+    }
+
+    public static TextDisplay spawnLabel(Location location, Component text, Color color, Collection<UUID> privateViewers) {
         World world = location.getWorld();
         if (world == null) {
             throw new IllegalArgumentException("Location world is null");
         }
 
-        return world.spawn(location, TextDisplay.class, display -> {
-            display.setPersistent(false);
-            display.text(text);
-            display.setSeeThrough(false);
-            display.setShadowed(true);
-            display.setDefaultBackground(false);
-            display.setBillboard(Display.Billboard.CENTER);
-            display.setLineWidth(120);
-            display.setBrightness(new Display.Brightness(15, 15));
-            display.setBackgroundColor(color);
+        TextDisplay display = world.spawn(location, TextDisplay.class, spawned -> {
+            spawned.setPersistent(false);
+            spawned.text(text);
+            spawned.setSeeThrough(false);
+            spawned.setShadowed(true);
+            spawned.setDefaultBackground(false);
+            spawned.setBillboard(Display.Billboard.CENTER);
+            spawned.setLineWidth(160);
+            spawned.setBrightness(new Display.Brightness(15, 15));
+            spawned.setBackgroundColor(color);
+            spawned.setVisibleByDefault(true);
         });
+        if (privateViewers != null && !privateViewers.isEmpty()) {
+            DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+        }
+        return display;
     }
 
     private static ItemStack tileItem(MahjongTile tile, boolean faceDown) {
         String path = faceDown ? "mahjong_tile/back" : tile.itemModelPath();
+        return TILE_ITEM_CACHE.computeIfAbsent(path, key -> createTileItem(tile, key)).clone();
+    }
+
+    private static ItemStack createTileItem(MahjongTile tile, String path) {
         ItemStack itemStack = new ItemStack(Material.PAPER);
         ItemMeta meta = itemStack.getItemMeta();
         meta.setItemModel(new NamespacedKey(ITEM_MODEL_NAMESPACE, path));

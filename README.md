@@ -21,14 +21,22 @@ This repository currently includes a playable Paper-based Riichi Mahjong port fo
 - owner-only face-up hand rendering plus public face-down hand rendering
 - PacketEvents click-to-discard interaction
 - automatic settlement inventory UI and clickable reaction prompts
+- pre-round rule configuration and lobby summaries
+- local filler bots for unattended seats
+- MiniMessage-based player messaging with `zh-CN` / fallback English localization
+- locale-aware number formatting in command and settlement surfaces
+- MariaDB or H2-backed round history persistence with startup schema creation
 
-It is still not fully at feature parity with upstream `MahjongCraft`. The largest remaining gaps are long-match UX polish, richer per-player HUD hints, more refined board choreography, spectator/private packet sync beyond Bukkit visibility, and optional bot / table-management systems from the original mod.
+It is still not fully at feature parity with upstream `MahjongCraft`. The largest remaining gaps are long-match UX polish, richer per-player HUD hints, more refined board choreography, spectator/private packet sync beyond Bukkit visibility, and the original mod's broader non-plugin UX surface.
 
 ## Commands
 
 - `/mahjong create`
 - `/mahjong join <tableId>`
 - `/mahjong list`
+- `/mahjong addbot`
+- `/mahjong removebot`
+- `/mahjong rule [key] [value]`
 - `/mahjong start`
 - `/mahjong state`
 - `/mahjong riichi <index>`
@@ -52,6 +60,8 @@ It is still not fully at feature parity with upstream `MahjongCraft`. The larges
 ```
 
 The plugin expects the PacketEvents plugin to be installed on the server because it is declared as a dependency in `plugin.yml`.
+The project now also ships [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml) for Paper-native plugin metadata and dependency loading; `plugin.yml` is still kept for command and permission registration.
+Database settings live in [`config.yml`](./src/main/resources/config.yml); set `database.type` to `mariadb` or `h2`. Round settlements are written asynchronously to `round_history` and `round_player_result`.
 
 ## Resource Pack
 

@@ -2,19 +2,18 @@ package doublemoon.mahjongcraft.paper.riichi
 
 import doublemoon.mahjongcraft.paper.riichi.model.ClaimTarget
 import doublemoon.mahjongcraft.paper.riichi.model.ExhaustiveDraw
+import doublemoon.mahjongcraft.paper.riichi.model.GeneralSituation
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRound
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongTile
+import doublemoon.mahjongcraft.paper.riichi.model.PersonalSituation
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreItem
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreSettlement
 import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick
 import doublemoon.mahjongcraft.paper.riichi.model.TileInstance
 import doublemoon.mahjongcraft.paper.riichi.model.Wind
 import doublemoon.mahjongcraft.paper.riichi.model.YakuSettlement
-import org.mahjong4j.GeneralSituation
-import org.mahjong4j.PersonalSituation
-import org.mahjong4j.hands.Kantsu
-import org.mahjong4j.tile.TileType
+import mahjongutils.models.isYaochu
 import java.util.Collections
 import kotlin.random.Random
 
@@ -95,8 +94,8 @@ class RiichiRoundEngine(
         get() {
             if (discards.size < 4) return false
             val lastFour = discards.takeLast(4)
-            val first = lastFour.first().mahjong4jTile
-            if (first.type != TileType.FONPAI) return false
+            val first = lastFour.first().scoringTile
+            if (first.type.name != "Z" || first.realNum !in 1..4) return false
             return lastFour.all { it.code == lastFour.first().code }
         }
 
@@ -116,9 +115,9 @@ class RiichiRoundEngine(
         get() = GeneralSituation(
             isFirstRound,
             isHoutei,
-            round.wind.tile,
-            doraIndicators.map { it.mahjongTile.nextTile.mahjong4jTile },
-            uraDoraIndicators.map { it.mahjongTile.nextTile.mahjong4jTile }
+            round.wind,
+            doraIndicators.map { it.mahjongTile },
+            uraDoraIndicators.map { it.mahjongTile }
         )
 
     init {
@@ -258,7 +257,7 @@ class RiichiRoundEngine(
         seats.filter { player ->
             player.discardedTiles.isNotEmpty() &&
                 player.discardedTiles.size == player.discardedTilesForDisplay.size &&
-                player.discardedTiles.all { it.mahjong4jTile.isYaochu }
+                player.discardedTiles.all { it.scoringTile.isYaochu }
         }
 
     private fun clearRoundState() {
@@ -367,7 +366,7 @@ class RiichiRoundEngine(
                 rule = rule,
                 generalSituation = generalSituation,
                 personalSituation = personalSituation(candidate, isTsumo = false, isChankan = true)
-            ) && !candidate.isFuriten(tile, discards) && (!allowOnlyKokushi || candidate.isKokushimuso(tile.mahjong4jTile))
+            ) && !candidate.isFuriten(tile, discards) && (!allowOnlyKokushi || candidate.isKokushimuso(tile.mahjongTile))
             if (canRon) {
                 options[candidate.uuid] = ReactionOptions(canRon = true, canPon = false, canMinkan = false, chiiPairs = emptyList())
             }
@@ -493,7 +492,7 @@ class RiichiRoundEngine(
             )
             yakuSettlements += settlement
             val riichiStickPoints = if (it.riichi || it.doubleRiichi) ScoringStick.P1000.point else 0
-            val basicScore = (settlement.score * if (isDealer) 1.5 else 1.0).toInt()
+            val basicScore = settlement.score
             val score = basicScore - riichiStickPoints + if (it == atamahanePlayer) extraScore else 0
             scoreList += ScoreItem(it.displayName, it.uuid, it.points, score)
             it.points += score
@@ -647,7 +646,7 @@ class RiichiRoundEngine(
         isRinshanKaihoh: Boolean = false
     ): PersonalSituation {
         val selfWindNumber = seatOrderFromDealer().indexOf(player)
-        val jikaze = Wind.entries[selfWindNumber].tile
+        val jikaze = Wind.entries[selfWindNumber]
         val isIppatsu = player.isIppatsu(seats, discards)
         return PersonalSituation(
             isTsumo,
@@ -682,7 +681,7 @@ class RiichiRoundEngine(
         if (kanCount < 4) {
             return false
         }
-        return seats.count { player -> player.fuuroList.count { it.mentsu is Kantsu } > 0 } > 1
+        return seats.count { player -> player.fuuroList.count { it.isKan } > 0 } > 1
     }
 
     private fun finishRound(dealerRemaining: Boolean, clearRiichiSticks: Boolean) {

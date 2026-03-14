@@ -1,11 +1,9 @@
 package doublemoon.mahjongcraft.paper.riichi.model
 
-import org.mahjong4j.hands.Kantsu
-import org.mahjong4j.hands.Mentsu
-import org.mahjong4j.tile.Tile
-import org.mahjong4j.tile.TileType
-import org.mahjong4j.yaku.normals.NormalYaku
-import org.mahjong4j.yaku.yakuman.Yakuman
+import mahjongutils.models.Furo
+import mahjongutils.models.Tile
+import mahjongutils.models.TileType
+import mahjongutils.models.Wind as UtilsWind
 import java.util.UUID
 
 enum class MahjongTile {
@@ -53,17 +51,58 @@ enum class MahjongTile {
 
     val code: Int = ordinal
 
-    val mahjong4jTile: Tile
-        get() {
-            val tileCode = when (this) {
-                M5_RED -> M5.code
-                P5_RED -> P5.code
-                S5_RED -> S5.code
-                UNKNOWN -> M1.code
-                else -> code
-            }
-            return Tile.valueOf(tileCode)
+    val baseTile: MahjongTile
+        get() = when (this) {
+            M5_RED -> M5
+            P5_RED -> P5
+            S5_RED -> S5
+            else -> this
         }
+
+    val utilsTile: Tile
+        get() = when (this) {
+            M1 -> Tile.get(TileType.M, 1)
+            M2 -> Tile.get(TileType.M, 2)
+            M3 -> Tile.get(TileType.M, 3)
+            M4 -> Tile.get(TileType.M, 4)
+            M5 -> Tile.get(TileType.M, 5)
+            M6 -> Tile.get(TileType.M, 6)
+            M7 -> Tile.get(TileType.M, 7)
+            M8 -> Tile.get(TileType.M, 8)
+            M9 -> Tile.get(TileType.M, 9)
+            P1 -> Tile.get(TileType.P, 1)
+            P2 -> Tile.get(TileType.P, 2)
+            P3 -> Tile.get(TileType.P, 3)
+            P4 -> Tile.get(TileType.P, 4)
+            P5 -> Tile.get(TileType.P, 5)
+            P6 -> Tile.get(TileType.P, 6)
+            P7 -> Tile.get(TileType.P, 7)
+            P8 -> Tile.get(TileType.P, 8)
+            P9 -> Tile.get(TileType.P, 9)
+            S1 -> Tile.get(TileType.S, 1)
+            S2 -> Tile.get(TileType.S, 2)
+            S3 -> Tile.get(TileType.S, 3)
+            S4 -> Tile.get(TileType.S, 4)
+            S5 -> Tile.get(TileType.S, 5)
+            S6 -> Tile.get(TileType.S, 6)
+            S7 -> Tile.get(TileType.S, 7)
+            S8 -> Tile.get(TileType.S, 8)
+            S9 -> Tile.get(TileType.S, 9)
+            EAST -> Tile.get(TileType.Z, 1)
+            SOUTH -> Tile.get(TileType.Z, 2)
+            WEST -> Tile.get(TileType.Z, 3)
+            NORTH -> Tile.get(TileType.Z, 4)
+            WHITE_DRAGON -> Tile.get(TileType.Z, 5)
+            GREEN_DRAGON -> Tile.get(TileType.Z, 6)
+            RED_DRAGON -> Tile.get(TileType.Z, 7)
+            M5_RED -> Tile.get(TileType.M, 0)
+            P5_RED -> Tile.get(TileType.P, 0)
+            S5_RED -> Tile.get(TileType.S, 0)
+            UNKNOWN -> Tile.get(TileType.M, 1)
+        }
+
+    val scoringTile: Tile
+        get() = baseTile.utilsTile
 
     val sortOrder: Int
         get() = when (this) {
@@ -74,26 +113,46 @@ enum class MahjongTile {
         }
 
     val nextTile: MahjongTile
-        get() {
-            val tile = mahjong4jTile
-            val nextTileCode = when (tile.type) {
-                TileType.FONPAI -> if (tile == Tile.PEI) Tile.TON.code else tile.code + 1
-                TileType.SANGEN -> if (tile == Tile.CHN) Tile.HAK.code else tile.code + 1
-                else -> if (tile.number == 9) tile.code - 8 else tile.code + 1
+        get() = when (baseTile) {
+            EAST -> SOUTH
+            SOUTH -> WEST
+            WEST -> NORTH
+            NORTH -> EAST
+            WHITE_DRAGON -> GREEN_DRAGON
+            GREEN_DRAGON -> RED_DRAGON
+            RED_DRAGON -> WHITE_DRAGON
+            else -> {
+                val tile = baseTile.utilsTile
+                if (tile.type == TileType.Z) {
+                    baseTile
+                } else {
+                    val nextNumber = if (tile.realNum == 9) 1 else tile.realNum + 1
+                    fromUtilsTile(Tile.get(tile.type, nextNumber))
+                }
             }
-            return entries[nextTileCode]
         }
 
     val previousTile: MahjongTile
-        get() {
-            val tile = mahjong4jTile
-            val previousTileCode = when (tile.type) {
-                TileType.FONPAI -> if (tile == Tile.TON) Tile.PEI.code else tile.code - 1
-                TileType.SANGEN -> if (tile == Tile.HAK) Tile.CHN.code else tile.code - 1
-                else -> if (tile.number == 1) tile.code + 8 else tile.code - 1
+        get() = when (baseTile) {
+            EAST -> NORTH
+            SOUTH -> EAST
+            WEST -> SOUTH
+            NORTH -> WEST
+            WHITE_DRAGON -> RED_DRAGON
+            GREEN_DRAGON -> WHITE_DRAGON
+            RED_DRAGON -> GREEN_DRAGON
+            else -> {
+                val tile = baseTile.utilsTile
+                if (tile.type == TileType.Z) {
+                    baseTile
+                } else {
+                    val previousNumber = if (tile.realNum == 1) 9 else tile.realNum - 1
+                    fromUtilsTile(Tile.get(tile.type, previousNumber))
+                }
             }
-            return entries[previousTileCode]
         }
+
+    fun sameKind(other: MahjongTile): Boolean = scoringTile == other.scoringTile
 
     fun itemModelPath(): String = "mahjong_tile/${name.lowercase()}"
 
@@ -118,14 +177,69 @@ enum class MahjongTile {
             remove(P5)
             add(P5_RED)
         }
+
+        fun fromUtilsTile(tile: Tile): MahjongTile = when (tile.type) {
+            TileType.M -> when (tile.num) {
+                0 -> M5_RED
+                1 -> M1
+                2 -> M2
+                3 -> M3
+                4 -> M4
+                5 -> M5
+                6 -> M6
+                7 -> M7
+                8 -> M8
+                9 -> M9
+                else -> UNKNOWN
+            }
+
+            TileType.P -> when (tile.num) {
+                0 -> P5_RED
+                1 -> P1
+                2 -> P2
+                3 -> P3
+                4 -> P4
+                5 -> P5
+                6 -> P6
+                7 -> P7
+                8 -> P8
+                9 -> P9
+                else -> UNKNOWN
+            }
+
+            TileType.S -> when (tile.num) {
+                0 -> S5_RED
+                1 -> S1
+                2 -> S2
+                3 -> S3
+                4 -> S4
+                5 -> S5
+                6 -> S6
+                7 -> S7
+                8 -> S8
+                9 -> S9
+                else -> UNKNOWN
+            }
+
+            TileType.Z -> when (tile.realNum) {
+                1 -> EAST
+                2 -> SOUTH
+                3 -> WEST
+                4 -> NORTH
+                5 -> WHITE_DRAGON
+                6 -> GREEN_DRAGON
+                7 -> RED_DRAGON
+                else -> UNKNOWN
+            }
+        }
     }
 }
 
-enum class Wind(val tile: Tile) {
-    EAST(Tile.TON),
-    SOUTH(Tile.NAN),
-    WEST(Tile.SHA),
-    NORTH(Tile.PEI)
+enum class Wind(val utilsWind: UtilsWind) {
+    EAST(UtilsWind.East),
+    SOUTH(UtilsWind.South),
+    WEST(UtilsWind.West),
+    NORTH(UtilsWind.North)
 }
 
 enum class ClaimTarget {
@@ -133,6 +247,14 @@ enum class ClaimTarget {
     RIGHT,
     LEFT,
     ACROSS
+}
+
+enum class MeldType {
+    CHII,
+    PON,
+    MINKAN,
+    ANKAN,
+    KAKAN
 }
 
 enum class DoubleYakuman {
@@ -231,26 +353,68 @@ data class TileInstance(
     val code: Int
         get() = mahjongTile.code
 
-    val mahjong4jTile: Tile
-        get() = mahjongTile.mahjong4jTile
+    val baseTile: MahjongTile
+        get() = mahjongTile.baseTile
+
+    val utilsTile: Tile
+        get() = mahjongTile.utilsTile
+
+    val scoringTile: Tile
+        get() = mahjongTile.scoringTile
 }
 
 fun List<TileInstance>.toMahjongTileList(): List<MahjongTile> = map { it.mahjongTile }
 
-open class Fuuro(
-    val mentsu: Mentsu,
+data class Fuuro(
+    val type: MeldType,
     val tileInstances: List<TileInstance>,
     val claimTarget: ClaimTarget,
     val claimTile: TileInstance
+) {
+    val isOpen: Boolean
+        get() = type != MeldType.ANKAN
+
+    val isKan: Boolean
+        get() = type == MeldType.MINKAN || type == MeldType.ANKAN || type == MeldType.KAKAN
+
+    val isPon: Boolean
+        get() = type == MeldType.PON
+
+    val utilsFuro: Furo
+        get() {
+            val baseTiles = tileInstances.map { it.scoringTile }.sorted()
+            return when (type) {
+                MeldType.CHII -> Furo(baseTiles)
+                MeldType.PON -> Furo(baseTiles)
+                MeldType.MINKAN, MeldType.KAKAN -> Furo(baseTiles)
+                MeldType.ANKAN -> Furo(baseTiles, ankan = true)
+            }
+        }
+}
+
+data class GeneralSituation(
+    val isFirstRound: Boolean,
+    val isHoutei: Boolean,
+    val bakaze: Wind,
+    val doraIndicators: List<MahjongTile>,
+    val uraDoraIndicators: List<MahjongTile>
 )
 
-class Kakantsu(identifierTile: Tile) : Kantsu(true, identifierTile)
+data class PersonalSituation(
+    val isTsumo: Boolean,
+    val isIppatsu: Boolean,
+    val isRiichi: Boolean,
+    val isDoubleRiichi: Boolean,
+    val isChankan: Boolean,
+    val isRinshanKaihoh: Boolean,
+    val jikaze: Wind
+)
 
 data class YakuSettlement(
     val displayName: String,
     val uuid: String,
-    val yakuList: List<NormalYaku>,
-    val yakumanList: List<Yakuman>,
+    val yakuList: List<String>,
+    val yakumanList: List<String>,
     val doubleYakumanList: List<DoubleYakuman>,
     val nagashiMangan: Boolean = false,
     val redFiveCount: Int = 0,
@@ -332,8 +496,8 @@ data class ScoreSettlement(
         after.forEachIndexed { index, playerScore ->
             val rankOrigin = origin.indexOf(playerScore)
             val rankFloat = when {
-                index < rankOrigin -> "↑"
-                index > rankOrigin -> "↓"
+                index < rankOrigin -> "UP"
+                index > rankOrigin -> "DOWN"
                 else -> ""
             }
             val scoreChangeString = when {

@@ -4,13 +4,17 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.SimplePacketListenerAbstract;
 import com.github.retrooper.packetevents.event.simple.PacketPlayReceiveEvent;
+import com.github.retrooper.packetevents.event.simple.PacketPlaySendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.render.DisplayClickAction;
 import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.render.DisplayVisibilityRegistry;
 import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
-import net.kyori.adventure.text.Component;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -47,9 +51,31 @@ public final class PacketEventsBridge {
                         action.tileIndex()
                     );
                     if (!accepted) {
-                        player.sendActionBar(Component.text("现在还不能操作这张牌"));
+                        PacketEventsBridge.this.plugin.messages().actionBar(player, "packet.cannot_click_tile");
                     }
                 });
+            }
+
+            @Override
+            public void onPacketPlaySend(PacketPlaySendEvent event) {
+                Player player = event.getPlayer();
+                if (player == null) {
+                    return;
+                }
+                UUID viewerId = player.getUniqueId();
+                if (event.getPacketType() == PacketType.Play.Server.SPAWN_ENTITY) {
+                    WrapperPlayServerSpawnEntity packet = new WrapperPlayServerSpawnEntity(event);
+                    if (!DisplayVisibilityRegistry.canView(packet.getEntityId(), viewerId)) {
+                        event.setCancelled(true);
+                    }
+                    return;
+                }
+                if (event.getPacketType() == PacketType.Play.Server.ENTITY_METADATA) {
+                    WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(event);
+                    if (!DisplayVisibilityRegistry.canView(packet.getEntityId(), viewerId)) {
+                        event.setCancelled(true);
+                    }
+                }
             }
         };
     }

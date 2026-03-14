@@ -18,7 +18,10 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.11.2")
-    implementation("com.github.mahjong4j:mahjong4j:0.3.2")
+    implementation("io.github.ssttkkl:mahjong-utils:0.7.7")
+    implementation("org.mariadb.jdbc:mariadb-java-client:3.5.3")
+    implementation("com.h2database:h2:2.3.232")
+    implementation("com.zaxxer:HikariCP:6.3.0")
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 }
@@ -43,7 +46,7 @@ tasks {
 
     processResources {
         filteringCharset = Charsets.UTF_8.name()
-        filesMatching("plugin.yml") {
+        filesMatching(listOf("plugin.yml", "paper-plugin.yml")) {
             expand("version" to project.version)
         }
     }

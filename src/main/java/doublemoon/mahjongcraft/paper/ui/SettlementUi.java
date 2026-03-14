@@ -1,5 +1,6 @@
 package doublemoon.mahjongcraft.paper.ui;
 
+import doublemoon.mahjongcraft.paper.i18n.MessageService;
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.riichi.RoundResolution;
 import doublemoon.mahjongcraft.paper.riichi.model.RankedScoreItem;
@@ -15,7 +16,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -37,75 +37,101 @@ public final class SettlementUi {
         if (resolution == null) {
             return;
         }
-        player.openInventory(createInventory(session, resolution));
+        player.openInventory(createInventory(player, session, resolution));
     }
 
-    private static Inventory createInventory(MahjongTableSession session, RoundResolution resolution) {
+    private static Inventory createInventory(Player player, MahjongTableSession session, RoundResolution resolution) {
+        MessageService messages = session.plugin().messages();
+        Locale locale = messages.resolveLocale(player);
         SettlementHolder holder = new SettlementHolder(session.id());
-        Inventory inventory = Bukkit.createInventory(holder, INVENTORY_SIZE, Component.text("结算 - " + resolution.getTitle()));
+        Inventory inventory = Bukkit.createInventory(
+            holder,
+            INVENTORY_SIZE,
+            messages.render(locale, "ui.settlement_title", messages.tag("title", resolution.getTitle()))
+        );
         holder.bind(inventory);
         fillBackground(inventory);
-        inventory.setItem(4, summaryItem(session, resolution));
-        placeIndicatorRow(inventory, 0, "宝牌指示牌", session.doraIndicators());
-        placeIndicatorRow(inventory, 9, "里宝牌指示牌", session.uraDoraIndicators());
-        placeScoreItems(inventory, resolution.getScoreSettlement());
-        placeSettlementDetails(inventory, resolution);
+        inventory.setItem(4, summaryItem(session, resolution, locale));
+        placeIndicatorRow(inventory, locale, session, 0, "ui.dora_indicators", session.doraIndicators());
+        placeIndicatorRow(inventory, locale, session, 9, "ui.uradora_indicators", session.uraDoraIndicators());
+        placeScoreItems(inventory, locale, session, resolution.getScoreSettlement());
+        placeSettlementDetails(inventory, locale, session, resolution);
         return inventory;
     }
 
     private static void fillBackground(Inventory inventory) {
-        ItemStack filler = namedItem(Material.BLACK_STAINED_GLASS_PANE, " ", List.of());
+        ItemStack filler = namedItem(Material.BLACK_STAINED_GLASS_PANE, Component.text(" "), List.of());
         for (int slot = 0; slot < inventory.getSize(); slot++) {
             inventory.setItem(slot, filler.clone());
         }
     }
 
-    private static ItemStack summaryItem(MahjongTableSession session, RoundResolution resolution) {
-        List<String> lore = new ArrayList<>();
-        lore.add("局况: " + session.roundDisplay());
-        lore.add("当前庄家: " + session.dealerName());
+    private static ItemStack summaryItem(MahjongTableSession session, RoundResolution resolution, Locale locale) {
+        MessageService messages = session.plugin().messages();
+        List<Component> lore = new ArrayList<>();
+        lore.add(messages.render(locale, "ui.summary.round", messages.tag("value", session.roundDisplay())));
+        lore.add(messages.render(locale, "ui.summary.dealer", messages.tag("value", session.dealerName())));
         if (resolution.getDraw() != null) {
-            lore.add("流局类型: " + resolution.getDraw().name());
+            lore.add(messages.render(locale, "ui.summary.draw_type", messages.tag("value", resolution.getDraw().name())));
         }
         if (resolution.getScoreSettlement() != null) {
-            lore.add("本次结算玩家数: " + resolution.getScoreSettlement().getScoreList().size());
+            lore.add(messages.render(locale, "ui.summary.settled_players", messages.number(locale, "value", resolution.getScoreSettlement().getScoreList().size())));
         }
-        return namedItem(Material.NETHER_STAR, "结算结果: " + resolution.getTitle(), lore);
+        return namedItem(Material.NETHER_STAR, messages.render(locale, "ui.summary_title", messages.tag("title", resolution.getTitle())), lore);
     }
 
-    private static void placeIndicatorRow(Inventory inventory, int startSlot, String label, List<MahjongTile> tiles) {
+    private static void placeIndicatorRow(Inventory inventory, Locale locale, MahjongTableSession session, int startSlot, String key, List<MahjongTile> tiles) {
+        MessageService messages = session.plugin().messages();
+        Component label = messages.render(locale, key);
         for (int i = 0; i < 5; i++) {
             if (i < tiles.size()) {
                 inventory.setItem(startSlot + i, tileItem(tiles.get(i), false, label));
             } else {
-                inventory.setItem(startSlot + i, namedItem(Material.GRAY_STAINED_GLASS_PANE, label, List.of("本局没有更多指示牌")));
+                inventory.setItem(startSlot + i, namedItem(Material.GRAY_STAINED_GLASS_PANE, label, List.of(messages.render(locale, "ui.no_tile_slot"))));
             }
         }
     }
 
-    private static void placeScoreItems(Inventory inventory, ScoreSettlement settlement) {
+    private static void placeScoreItems(Inventory inventory, Locale locale, MahjongTableSession session, ScoreSettlement settlement) {
+        MessageService messages = session.plugin().messages();
         if (settlement == null) {
-            inventory.setItem(22, namedItem(Material.PAPER, "无点数变动", List.of("本次为展示性结算")));
+            inventory.setItem(
+                22,
+                namedItem(
+                    Material.PAPER,
+                    messages.render(locale, "ui.no_score_movement"),
+                    List.of(messages.render(locale, "ui.no_score_movement_desc"))
+                )
+            );
             return;
         }
+
         int[] slots = {18, 20, 24, 26};
         List<RankedScoreItem> ranked = settlement.getRankedScoreList();
         for (int i = 0; i < ranked.size() && i < slots.length; i++) {
             RankedScoreItem item = ranked.get(i);
-            List<String> lore = new ArrayList<>();
-            lore.add("原点数: " + item.getScoreItem().getScoreOrigin());
-            lore.add("变动: " + (item.getScoreChangeText().isBlank() ? "0" : item.getScoreChangeText()));
-            lore.add("现点数: " + item.getScoreTotal());
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.render(locale, "ui.score.start", messages.number(locale, "value", item.getScoreItem().getScoreOrigin())));
+            lore.add(messages.render(locale, "ui.score.change", messages.tag("value", item.getScoreChangeText().isBlank() ? "0" : item.getScoreChangeText())));
+            lore.add(messages.render(locale, "ui.score.total", messages.number(locale, "value", item.getScoreTotal())));
             if (!item.getRankFloatText().isBlank()) {
-                lore.add("名次变化: " + item.getRankFloatText());
+                lore.add(messages.render(locale, "ui.score.rank_shift", messages.tag("value", item.getRankFloatText())));
             }
-            inventory.setItem(slots[i], namedItem(Material.NAME_TAG, playerName(item.getScoreItem().getStringUUID()), lore));
+            inventory.setItem(slots[i], namedItem(Material.NAME_TAG, Component.text(playerName(session, item.getScoreItem().getStringUUID())), lore));
         }
     }
 
-    private static void placeSettlementDetails(Inventory inventory, RoundResolution resolution) {
+    private static void placeSettlementDetails(Inventory inventory, Locale locale, MahjongTableSession session, RoundResolution resolution) {
+        MessageService messages = session.plugin().messages();
         if (resolution.getYakuSettlements().isEmpty()) {
-            inventory.setItem(40, namedItem(Material.BOOK, "本局无和牌者", List.of("请查看上方点数区与流局结果")));
+            inventory.setItem(
+                40,
+                namedItem(
+                    Material.BOOK,
+                    messages.render(locale, "ui.no_winning_hand"),
+                    List.of(messages.render(locale, "ui.no_winning_hand_desc"))
+                )
+            );
             return;
         }
 
@@ -114,43 +140,47 @@ public final class SettlementUi {
             if (detailSlot >= INVENTORY_SIZE) {
                 break;
             }
-            inventory.setItem(detailSlot, namedItem(Material.ENCHANTED_BOOK, settlement.getDisplayName(), settlementLore(settlement)));
+            inventory.setItem(detailSlot, namedItem(Material.ENCHANTED_BOOK, Component.text(settlement.getDisplayName()), settlementLore(locale, session, settlement)));
             if (detailSlot + 1 < INVENTORY_SIZE) {
-                inventory.setItem(detailSlot + 1, tileItem(toDisplayTile(settlement.getWinningTile().name()), false, "和了牌"));
+                inventory.setItem(detailSlot + 1, tileItem(toDisplayTile(settlement.getWinningTile().name()), false, messages.render(locale, "ui.winning_tile")));
             }
             detailSlot += 3;
         }
     }
 
-    private static List<String> settlementLore(YakuSettlement settlement) {
-        List<String> lore = new ArrayList<>();
-        lore.add("符番: " + settlement.getFu() + "符 " + settlement.getHan() + "番");
-        lore.add("得点: " + settlement.getScore());
-        lore.add("立直: " + (settlement.getRiichi() ? "是" : "否"));
-        lore.add("和牌: " + settlement.getWinningTile().name().toLowerCase(Locale.ROOT));
-        lore.add("手牌: " + joinTiles(settlement.getHands()));
+    private static List<Component> settlementLore(Locale locale, MahjongTableSession session, YakuSettlement settlement) {
+        MessageService messages = session.plugin().messages();
+        List<Component> lore = new ArrayList<>();
+        lore.add(messages.render(locale, "ui.fu_han", messages.number(locale, "fu", settlement.getFu()), messages.number(locale, "han", settlement.getHan())));
+        lore.add(messages.render(locale, "ui.score", messages.number(locale, "value", settlement.getScore())));
+        lore.add(messages.render(locale, "ui.riichi", messages.tag("value", messages.plain(locale, settlement.getRiichi() ? "ui.yes" : "ui.no"))));
+        lore.add(messages.render(locale, "ui.winning_tile_line", messages.tag("value", settlement.getWinningTile().name().toLowerCase(Locale.ROOT))));
+        lore.add(messages.render(locale, "ui.hand", messages.tag("value", joinTiles(settlement.getHands()))));
         if (!settlement.getFuuroList().isEmpty()) {
             List<String> melds = new ArrayList<>();
-            settlement.getFuuroList().forEach(pair -> melds.add((pair.getFirst() ? "明" : "暗") + ":" + joinTiles(pair.getSecond())));
-            lore.add("副露: " + String.join(" | ", melds));
+            settlement.getFuuroList().forEach(pair -> melds.add((pair.getFirst() ? "open" : "closed") + ":" + joinTiles(pair.getSecond())));
+            lore.add(messages.render(locale, "ui.melds", messages.tag("value", String.join(" | ", melds))));
         }
         if (!settlement.getYakuList().isEmpty()) {
-            settlement.getYakuList().forEach(yaku -> lore.add("役: " + yaku.name()));
+            settlement.getYakuList().forEach(yaku -> lore.add(messages.render(locale, "ui.yaku", messages.tag("value", yaku))));
         }
         if (!settlement.getYakumanList().isEmpty()) {
-            settlement.getYakumanList().forEach(yaku -> lore.add("役满: " + yaku.name()));
+            settlement.getYakumanList().forEach(yaku -> lore.add(messages.render(locale, "ui.yakuman", messages.tag("value", yaku))));
         }
         if (!settlement.getDoubleYakumanList().isEmpty()) {
-            settlement.getDoubleYakumanList().forEach(yaku -> lore.add("双倍役满: " + yaku.name()));
+            settlement.getDoubleYakumanList().forEach(yaku -> lore.add(messages.render(locale, "ui.double_yakuman", messages.tag("value", yaku.name()))));
+        }
+        if (settlement.getNagashiMangan()) {
+            lore.add(messages.render(locale, "ui.nagashi_mangan"));
         }
         if (settlement.getRedFiveCount() > 0) {
-            lore.add("赤宝牌: " + settlement.getRedFiveCount());
+            lore.add(messages.render(locale, "ui.red_fives", messages.number(locale, "value", settlement.getRedFiveCount())));
         }
         if (!settlement.getDoraIndicators().isEmpty()) {
-            lore.add("宝牌指示: " + joinTiles(settlement.getDoraIndicators()));
+            lore.add(messages.render(locale, "ui.dora", messages.tag("value", joinTiles(settlement.getDoraIndicators()))));
         }
         if (!settlement.getUraDoraIndicators().isEmpty()) {
-            lore.add("里宝牌指示: " + joinTiles(settlement.getUraDoraIndicators()));
+            lore.add(messages.render(locale, "ui.uradora", messages.tag("value", joinTiles(settlement.getUraDoraIndicators()))));
         }
         return lore;
     }
@@ -163,21 +193,20 @@ public final class SettlementUi {
         return String.join(" ", names);
     }
 
-    private static String playerName(String stringUuid) {
+    private static String playerName(MahjongTableSession session, String stringUuid) {
         try {
-            OfflinePlayer player = Bukkit.getOfflinePlayer(UUID.fromString(stringUuid));
-            return player.getName() == null ? stringUuid : player.getName();
+            return session.displayName(UUID.fromString(stringUuid));
         } catch (IllegalArgumentException ex) {
             return stringUuid;
         }
     }
 
-    private static ItemStack tileItem(MahjongTile tile, boolean faceDown, String name) {
+    private static ItemStack tileItem(MahjongTile tile, boolean faceDown, Component name) {
         String path = faceDown ? "mahjong_tile/back" : tile.itemModelPath();
         ItemStack itemStack = new ItemStack(Material.PAPER);
         ItemMeta meta = itemStack.getItemMeta();
         meta.setItemModel(new NamespacedKey("mahjongcraft", path));
-        meta.displayName(Component.text(name, NamedTextColor.GOLD));
+        meta.displayName(name.colorIfAbsent(NamedTextColor.GOLD));
         itemStack.setItemMeta(meta);
         return itemStack;
     }
@@ -186,14 +215,12 @@ public final class SettlementUi {
         return MahjongTile.valueOf(name);
     }
 
-    private static ItemStack namedItem(Material material, String name, List<String> loreLines) {
+    private static ItemStack namedItem(Material material, Component name, List<Component> loreLines) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text(name, NamedTextColor.YELLOW));
+        meta.displayName(name.colorIfAbsent(NamedTextColor.YELLOW));
         if (!loreLines.isEmpty()) {
-            List<Component> lore = new ArrayList<>();
-            loreLines.forEach(line -> lore.add(Component.text(line, NamedTextColor.GRAY)));
-            meta.lore(lore);
+            meta.lore(loreLines);
         }
         item.setItemMeta(meta);
         return item;
