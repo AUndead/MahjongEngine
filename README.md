@@ -33,27 +33,30 @@ It is still not fully at feature parity with upstream `MahjongCraft`. The larges
 
 ## Commands
 
-- `/mahjong create`
-- `/mahjong join <tableId>`
-- `/mahjong list`
-- `/mahjong addbot`
-- `/mahjong removebot`
-- `/mahjong rule [key] [value]`
-- `/mahjong start`
-- `/mahjong state`
-- `/mahjong riichi <index>`
-- `/mahjong tsumo`
-- `/mahjong ron`
-- `/mahjong pon`
-- `/mahjong minkan`
-- `/mahjong chii <tileA> <tileB>`
-- `/mahjong kan <tile>`
-- `/mahjong skip`
-- `/mahjong kyuushu`
-- `/mahjong settlement`
-- `/mahjong render`
-- `/mahjong clear`
-- `/mahjong leave`
+- `/mahjong help`: show the in-game command help with explanations
+- `/mahjong create`: create a new table at your position
+- `/mahjong join <tableId>`: join an existing table as a player
+- `/mahjong leave`: leave your current table or stop spectating
+- `/mahjong list`: show active tables and their locations
+- `/mahjong spectate <tableId>`: watch a table without taking a seat
+- `/mahjong unspectate`: stop spectating the current table
+- `/mahjong addbot`: fill one empty seat with a bot
+- `/mahjong removebot`: remove one bot before the round starts
+- `/mahjong rule [key] [value]`: view or change table rules before starting
+- `/mahjong start`: start the round when 4 seats are filled
+- `/mahjong state`: show the current table and round state
+- `/mahjong riichi <index>`: declare riichi and discard the chosen tile index
+- `/mahjong tsumo`: claim a self-draw win if your hand is ready
+- `/mahjong ron`: claim a win on another player's discard
+- `/mahjong pon`: call pon on the current reaction window
+- `/mahjong minkan`: call an open kan on the current reaction window
+- `/mahjong chii <tileA> <tileB>`: call chii with the listed two tiles from your hand
+- `/mahjong kan <tile>`: declare ankan or kakan with the given tile kind
+- `/mahjong skip`: pass the current reaction opportunity
+- `/mahjong kyuushu`: declare nine terminals and honors abortive draw
+- `/mahjong settlement`: reopen the latest settlement UI for this table
+- `/mahjong render`: force a table display refresh
+- `/mahjong clear`: remove current display entities for the table
 
 ## Build
 
