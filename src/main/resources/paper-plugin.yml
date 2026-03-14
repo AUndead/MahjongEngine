@@ -1,5 +1,6 @@
 name: MahjongPaper
 main: doublemoon.mahjongcraft.paper.MahjongPaperPlugin
+loader: doublemoon.mahjongcraft.paper.MahjongPaperLoader
 version: ${version}
 api-version: "1.21.11"
 description: Riichi Mahjong Paper plugin rewrite built around display entities, item_model and PacketEvents.
@@ -11,10 +12,3 @@ dependencies:
       load: BEFORE
       required: true
       join-classpath: true
-libraries:
-  - io.github.ssttkkl:mahjong-utils:${mahjongUtilsVersion}
-  - org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}
-  - com.h2database:h2:${h2Version}
-  - com.zaxxer:HikariCP:${hikariVersion}
-  - org.jetbrains.kotlin:kotlin-stdlib:${kotlinRuntimeVersion}
-  - org.jetbrains.kotlinx:kotlinx-serialization-json:${kotlinSerializationVersion}
