@@ -65,7 +65,7 @@ It is still not fully at feature parity with upstream `MahjongCraft`. The larges
 ```
 
 The plugin expects the PacketEvents plugin to be installed on the server because it is declared as a dependency in `plugin.yml`.
-The project now also ships [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml) for Paper-native plugin metadata and dependency loading; `plugin.yml` is still kept for command and permission registration.
+The build now produces a thin jar. Runtime libraries are declared in [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml), so modern Paper will download them on first load; `plugin.yml` is still kept for command and permission registration.
 Database settings live in [`config.yml`](./src/main/resources/config.yml); the default database type is `h2`, and you can switch `database.type` to `mariadb` if needed. Round settlements are written asynchronously to `round_history` and `round_player_result`.
 
 ## Resource Pack

@@ -11,3 +11,10 @@ dependencies:
       load: BEFORE
       required: true
       join-classpath: true
+libraries:
+  - io.github.ssttkkl:mahjong-utils:${mahjongUtilsVersion}
+  - org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}
+  - com.h2database:h2:${h2Version}
+  - com.zaxxer:HikariCP:${hikariVersion}
+  - org.jetbrains.kotlin:kotlin-stdlib:${kotlinRuntimeVersion}
+  - org.jetbrains.kotlinx:kotlinx-serialization-json:${kotlinSerializationVersion}

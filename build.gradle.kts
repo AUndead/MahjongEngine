@@ -1,12 +1,22 @@
 plugins {
     java
+    jacoco
     kotlin("jvm") version "2.2.0"
     kotlin("plugin.serialization") version "2.2.0"
-    id("com.gradleup.shadow") version "9.0.0-beta8"
 }
 
 group = "doublemoon.mahjongcraft"
 version = "0.1.0-SNAPSHOT"
+
+val kotlinRuntimeVersion = "2.2.0"
+val kotlinSerializationVersion = "1.9.0"
+val packetEventsVersion = "2.11.2"
+val mahjongUtilsVersion = "0.7.7"
+val mariadbVersion = "3.5.3"
+val h2Version = "2.3.232"
+val hikariVersion = "6.3.0"
+val adventureVersion = "4.17.0"
+val junitVersion = "5.12.2"
 
 repositories {
     mavenCentral()
@@ -17,19 +27,19 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    compileOnly("com.github.retrooper:packetevents-spigot:2.11.2")
-    implementation("io.github.ssttkkl:mahjong-utils:0.7.7")
-    implementation("org.mariadb.jdbc:mariadb-java-client:3.5.3")
-    implementation("com.h2database:h2:2.3.232")
-    implementation("com.zaxxer:HikariCP:6.3.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    compileOnly("com.github.retrooper:packetevents-spigot:$packetEventsVersion")
+    implementation("io.github.ssttkkl:mahjong-utils:$mahjongUtilsVersion")
+    implementation("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
+    implementation("com.h2database:h2:$h2Version")
+    implementation("com.zaxxer:HikariCP:$hikariVersion")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinRuntimeVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinSerializationVersion")
     testCompileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
-    testImplementation("net.kyori:adventure-api:4.17.0")
-    testImplementation("net.kyori:adventure-text-minimessage:4.17.0")
-    testImplementation("net.kyori:adventure-text-serializer-plain:4.17.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
+    testImplementation("net.kyori:adventure-api:$adventureVersion")
+    testImplementation("net.kyori:adventure-text-minimessage:$adventureVersion")
+    testImplementation("net.kyori:adventure-text-serializer-plain:$adventureVersion")
 }
 
 java {
@@ -53,19 +63,33 @@ tasks {
     processResources {
         filteringCharset = Charsets.UTF_8.name()
         filesMatching(listOf("plugin.yml", "paper-plugin.yml")) {
-            expand("version" to project.version)
+            expand(
+                "version" to project.version,
+                "mahjongUtilsVersion" to mahjongUtilsVersion,
+                "mariadbVersion" to mariadbVersion,
+                "h2Version" to h2Version,
+                "hikariVersion" to hikariVersion,
+                "kotlinRuntimeVersion" to kotlinRuntimeVersion,
+                "kotlinSerializationVersion" to kotlinSerializationVersion
+            )
         }
-    }
-
-    shadowJar {
-        archiveClassifier.set("")
-    }
-
-    build {
-        dependsOn(shadowJar)
     }
 
     test {
         useJUnitPlatform()
+        finalizedBy(jacocoTestReport)
+    }
+
+    jacocoTestReport {
+        dependsOn(test)
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+            csv.required.set(false)
+        }
+    }
+
+    check {
+        dependsOn(jacocoTestReport)
     }
 }
