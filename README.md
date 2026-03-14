@@ -14,7 +14,7 @@ This repository currently includes a playable Paper-based Riichi Mahjong port fo
 - 4-seat riichi wall generation with red fives
 - dealing, drawing and discarding
 - riichi, tsumo, ron, chii, pon, minkan, ankan and kakan flows
-- yaku / fu / han / score settlement through `mahjong4j`
+- yaku / fu / han / score settlement through `mahjong-utils`
 - furiten checks, chankan, rinshan kaihou, suufon renda, suucha riichi, suukaikan and kyuushu kyuuhai
 - nagashi mangan handling on exhaustive draw
 - display-entity table rendering with hidden-information hands
@@ -23,11 +23,13 @@ This repository currently includes a playable Paper-based Riichi Mahjong port fo
 - automatic settlement inventory UI and clickable reaction prompts
 - pre-round rule configuration and lobby summaries
 - local filler bots for unattended seats
+- spectator mode with packet-gated private overlays and private hand/front visibility control
+- per-viewer localized HUD overlays, turn prompts and settlement messaging
 - MiniMessage-based player messaging with `zh-CN` / fallback English localization
 - locale-aware number formatting in command and settlement surfaces
 - MariaDB or H2-backed round history persistence with startup schema creation
 
-It is still not fully at feature parity with upstream `MahjongCraft`. The largest remaining gaps are long-match UX polish, richer per-player HUD hints, more refined board choreography, spectator/private packet sync beyond Bukkit visibility, and the original mod's broader non-plugin UX surface.
+It is still not fully at feature parity with upstream `MahjongCraft`. The largest remaining gaps are the original mod's more specialized client UX surface, additional board choreography/animation polish, and broader end-to-end parity verification against every upstream interaction edge case.
 
 ## Commands
 
@@ -66,6 +68,7 @@ Database settings live in [`config.yml`](./src/main/resources/config.yml); set `
 ## Resource Pack
 
 The matching pack is in [`resourcepack`](./resourcepack).
+It is authored in the 1.21.11-style `pack.mcmeta` format using `min_format` / `max_format` with resource pack version `75.0`.
 
 For the current prototype the plugin uses the `mahjongcraft` namespace and binds tile displays to paths like:
 
