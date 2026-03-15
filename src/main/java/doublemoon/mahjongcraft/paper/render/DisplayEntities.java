@@ -65,7 +65,7 @@ public final class DisplayEntities {
         }
 
         ItemDisplay display = world.spawn(renderedLocation, ItemDisplay.class, spawned -> {
-            boolean privateOnly = privateViewers != null && !privateViewers.isEmpty();
+            boolean restrictedVisibility = privateViewers != null;
             spawned.setPersistent(false);
             spawned.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
             spawned.setInterpolationDuration(1);
@@ -77,7 +77,7 @@ public final class DisplayEntities {
             spawned.setDisplayWidth(0.4F);
             spawned.setDisplayHeight(0.6F);
             spawned.setRotation(yaw, 0.0F);
-            spawned.setVisibleByDefault(!privateOnly && visibleByDefault);
+            spawned.setVisibleByDefault(!restrictedVisibility && visibleByDefault);
             spawned.setTransformation(new Transformation(
                 new Vector3f(),
                 new AxisAngle4f((float) Math.toRadians(pose.xRotationDegrees()), 1.0F, 0.0F, 0.0F),
@@ -90,8 +90,12 @@ public final class DisplayEntities {
         if (clickAction != null) {
             TableDisplayRegistry.register(display.getEntityId(), clickAction);
         }
-        if (privateViewers != null && !privateViewers.isEmpty()) {
-            DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+        if (privateViewers != null) {
+            if (privateViewers.isEmpty()) {
+                DisplayVisibilityRegistry.registerHidden(display.getEntityId());
+            } else {
+                DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+            }
             syncPrivateVisibility(plugin, display, privateViewers);
         }
         registerForCraftEngineCulling(plugin, display);
@@ -219,7 +223,7 @@ public final class DisplayEntities {
 
     private static void syncPrivateVisibility(Plugin plugin, Entity entity, Collection<UUID> privateViewers) {
         for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
-            if (privateViewers.contains(player.getUniqueId())) {
+            if (!privateViewers.isEmpty() && privateViewers.contains(player.getUniqueId())) {
                 player.showEntity(plugin, entity);
             } else {
                 player.hideEntity(plugin, entity);
