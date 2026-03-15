@@ -1,4 +1,4 @@
-name: MahjongPaper
+﻿name: MahjongPaper
 main: doublemoon.mahjongcraft.paper.MahjongPaperPlugin
 version: ${version}
 api-version: "1.21.11"

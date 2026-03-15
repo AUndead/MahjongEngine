@@ -1,1 +1,1 @@
-rootProject.name = "mahjong-paper"
+﻿rootProject.name = "mahjong-paper"

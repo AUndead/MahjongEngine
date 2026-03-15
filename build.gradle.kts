@@ -1,4 +1,4 @@
-import org.gradle.api.GradleException
+﻿import org.gradle.api.GradleException
 import java.io.File
 
 plugins {
