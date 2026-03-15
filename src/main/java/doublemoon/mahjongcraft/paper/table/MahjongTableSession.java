@@ -1651,26 +1651,16 @@ public final class MahjongTableSession {
         this.updateRegion(this.seatRegionKey("labels", wind), this.seatLabelFingerprint(wind), () -> this.renderer.renderSeatLabels(this, wind));
         this.updateRegion(this.seatRegionKey("sticks", wind), this.stickFingerprint(wind), () -> this.renderer.renderSticks(this, wind));
         this.updateRegion(this.seatRegionKey("hand-public", wind), this.handPublicFingerprint(wind), () -> this.renderer.renderHandPublic(this, wind));
-        this.updateHandPrivateRegions(wind);
+        this.clearLegacyHandPrivateTileRegions(wind);
+        this.updateRegion(this.seatRegionKey("hand-private", wind), this.handPrivateFingerprint(wind), () -> this.renderer.renderHandPrivate(this, wind));
         this.updateRegion(this.seatRegionKey("discards", wind), this.discardFingerprint(wind), () -> this.renderer.renderDiscards(this, wind));
         this.updateRegion(this.seatRegionKey("melds", wind), this.meldFingerprint(wind), () -> this.renderer.renderMelds(this, wind));
     }
 
-    private void updateHandPrivateRegions(SeatWind wind) {
-        UUID playerId = this.playerAt(wind);
-        int handSize = playerId == null ? 0 : this.hand(playerId).size();
+    private void clearLegacyHandPrivateTileRegions(SeatWind wind) {
         for (int tileIndex = 0; tileIndex < MAX_HAND_TILE_REGIONS; tileIndex++) {
             String regionKey = this.handPrivateRegionKey(wind, tileIndex);
-            if (tileIndex >= handSize) {
-                this.clearRegion(regionKey);
-                continue;
-            }
-            int capturedTileIndex = tileIndex;
-            this.updateRegion(
-                regionKey,
-                this.handPrivateTileFingerprint(wind, capturedTileIndex),
-                () -> this.renderer.renderHandPrivateTile(this, wind, capturedTileIndex)
-            );
+            this.clearRegion(regionKey);
         }
     }
 
@@ -1780,22 +1770,18 @@ public final class MahjongTableSession {
         return builder.toString();
     }
 
-    private String handPrivateTileFingerprint(SeatWind wind, int tileIndex) {
+    private String handPrivateFingerprint(SeatWind wind) {
         UUID playerId = this.playerAt(wind);
-        FingerprintBuilder builder = this.seatFingerprintBuilder("hand-private", wind, playerId, 128)
-            .field(tileIndex);
+        FingerprintBuilder builder = this.seatFingerprintBuilder("hand-private", wind, playerId, 256);
         if (playerId == null) {
             return builder.toString();
         }
         List<doublemoon.mahjongcraft.paper.model.MahjongTile> hand = this.hand(playerId);
-        if (tileIndex < 0 || tileIndex >= hand.size()) {
-            return builder.field("empty").toString();
-        }
-        return builder.field(this.onlinePlayer(playerId) != null)
+        builder.field(this.onlinePlayer(playerId) != null)
             .field(this.stickLayoutCount(wind))
-            .field(tileIndex == this.selectedHandTileIndex(playerId))
-            .field(hand.get(tileIndex).name())
-            .toString();
+            .field(this.selectedHandTileIndex(playerId));
+        hand.forEach(tile -> builder.field(tile.name()));
+        return builder.toString();
     }
 
     private String discardFingerprint(SeatWind wind) {

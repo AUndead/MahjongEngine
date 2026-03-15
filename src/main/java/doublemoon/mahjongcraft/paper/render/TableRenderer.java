@@ -41,8 +41,8 @@ public final class TableRenderer {
     private static final double HALF_TABLE_LENGTH_NO_BORDER = 0.5D + 15.0D / 16.0D;
     private static final double DEAD_WALL_GAP = TILE_PADDING * 20.0D;
     private static final double WALL_TILE_STEP = TILE_WIDTH + TILE_PADDING;
-    private static final double UPRIGHT_TILE_Y = 0.0D;
-    private static final double FLAT_TILE_Y = 0.0D;
+    private static final double UPRIGHT_TILE_Y = TILE_HEIGHT / 2.0D;
+    private static final double FLAT_TILE_Y = TILE_DEPTH / 2.0D;
     private static final double SELECTED_HAND_TILE_Y_OFFSET = 0.06D;
     private static final float HAND_INTERACTION_WIDTH = 0.14F;
     private static final float HAND_INTERACTION_HEIGHT = 0.18F;
@@ -309,7 +309,7 @@ public final class TableRenderer {
         return spawned;
     }
 
-    public List<Entity> renderHandPrivateTile(MahjongTableSession session, SeatWind wind, int tileIndex) {
+    public List<Entity> renderHandPrivate(MahjongTableSession session, SeatWind wind) {
         Location center = displayCenter(session);
         UUID playerId = session.playerAt(wind);
         if (playerId == null) {
@@ -317,30 +317,29 @@ public final class TableRenderer {
         }
 
         List<MahjongTile> hand = session.hand(playerId);
-        if (tileIndex < 0 || tileIndex >= hand.size()) {
-            return List.of();
-        }
-
         float yaw = seatYaw(wind);
         List<UUID> ownerOnly = List.of(playerId);
-        Location tileLocation = handTileLocation(session, wind, hand.size(), tileIndex, tileIndex == session.selectedHandTileIndex(playerId));
-        List<Entity> spawned = new ArrayList<>(2);
-        spawned.add(DisplayEntities.spawnTileDisplay(
-            session.plugin(),
-            tileLocation,
-            yaw,
-            hand.get(tileIndex),
-            DisplayEntities.TileRenderPose.STANDING,
-            null,
-            true,
-            ownerOnly
-        ));
-        Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
-            handInteractionLocation(tileLocation),
-            new DisplayClickAction(session.id(), playerId, tileIndex)
-        );
-        if (clickHitbox != null) {
-            spawned.add(clickHitbox);
+        int selectedTileIndex = session.selectedHandTileIndex(playerId);
+        List<Entity> spawned = new ArrayList<>(hand.size() * 2);
+        for (int tileIndex = 0; tileIndex < hand.size(); tileIndex++) {
+            Location tileLocation = handTileLocation(session, wind, hand.size(), tileIndex, tileIndex == selectedTileIndex);
+            spawned.add(DisplayEntities.spawnTileDisplay(
+                session.plugin(),
+                tileLocation,
+                yaw,
+                hand.get(tileIndex),
+                DisplayEntities.TileRenderPose.STANDING,
+                null,
+                true,
+                ownerOnly
+            ));
+            Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
+                handInteractionLocation(tileLocation),
+                new DisplayClickAction(session.id(), playerId, tileIndex)
+            );
+            if (clickHitbox != null) {
+                spawned.add(clickHitbox);
+            }
         }
         return spawned;
     }
