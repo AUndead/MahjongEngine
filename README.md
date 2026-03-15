@@ -6,7 +6,7 @@
 
 - Paper `ItemDisplay` and `TextDisplay`
 - `ItemMeta#setItemModel(...)` with a matching resource pack
-- PacketEvents entity interaction packets for tile clicking
+- CraftEngine furniture interaction and culling
 
 ## Status
 
@@ -21,11 +21,11 @@ This repository currently includes a playable Paper-based Riichi Mahjong port fo
 - nagashi mangan handling on exhaustive draw
 - display-entity table rendering with hidden-information hands
 - owner-only face-up hand rendering plus public face-down hand rendering
-- PacketEvents click-to-discard interaction
+- CraftEngine-backed click-to-discard interaction
 - automatic settlement inventory UI and clickable reaction prompts
 - pre-round rule configuration and lobby summaries
 - local filler bots for unattended seats
-- spectator mode with packet-gated private overlays and private hand/front visibility control
+- spectator mode with private overlays and private hand/front visibility control
 - per-viewer localized HUD overlays, turn prompts and settlement messaging
 - MiniMessage-based player messaging with `zh-CN` / fallback English localization
 - locale-aware number formatting in command and settlement surfaces
@@ -74,17 +74,16 @@ Mahjong Soul-style defaults are now used for new tables: 4-player riichi, 25,000
 .\gradlew.bat build
 ```
 
-The plugin expects the PacketEvents plugin to be installed on the server because it is declared as a dependency in `plugin.yml`.
+The plugin expects the CraftEngine plugin to be installed on the server because it is declared as a dependency in `plugin.yml`.
 The build now produces a thin jar. Runtime libraries are resolved by the Paper plugin loader declared in [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml); `plugin.yml` is still kept for command and permission registration.
 Database settings live in [`config.yml`](./src/main/resources/config.yml); the default database type is `h2`, and you can switch `database.type` to `mariadb` if needed. Round settlements are written asynchronously to `round_history` and `round_player_result`.
 
 Recommended runtime stack for the current branch:
 
 - Paper
-- PacketEvents
 - CraftEngine
 
-MahjongPaper still runs without CraftEngine, but the current table pipeline now expects CraftEngine for the best result. Table hitboxes are exported as CraftEngine furniture, and display-entity culling is bridged into CraftEngine's tracked-entity culling system instead of using MahjongPaper's old local culling service.
+MahjongPaper currently expects CraftEngine at runtime. Table hitboxes are exported as CraftEngine furniture, display-entity culling is bridged into CraftEngine's tracked-entity culling system, and tile-click interaction now uses CraftEngine furniture interaction instead of the old PacketEvents bridge.
 
 ## Resource Pack
 
@@ -123,4 +122,4 @@ Important: CraftEngine entity culling must be enabled in CraftEngine's own confi
 
 - `MahjongCraft`: gameplay and assets source
 - `Paper`: display entities and `item_model` API
-- `PacketEvents`: interaction packet bridge
+- `CraftEngine`: custom items, furniture hitboxes, culling and interaction bridge

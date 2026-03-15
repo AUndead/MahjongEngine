@@ -13,7 +13,6 @@ version = "0.1.0-SNAPSHOT"
 
 val kotlinRuntimeVersion = "2.2.0"
 val kotlinSerializationVersion = "1.9.0"
-val packetEventsVersion = "2.11.2"
 val mahjongUtilsVersion = "0.7.7"
 val mariadbVersion = "3.5.3"
 val h2Version = "2.3.232"
@@ -216,6 +215,42 @@ fun writeCraftEngineBundle(enumSource: File, resourcepackDir: File, attributionF
             appendLine("                interactive: false")
             appendLine("                interaction-entity: false")
         }
+        appendLine("  mahjongpaper:hand_tile_hitbox:")
+        appendLine("    material: paper")
+        appendLine("    settings:")
+        appendLine("      tags:")
+        appendLine("        - mahjongpaper:hand_tile_hitbox")
+        appendLine("    data:")
+        appendLine("      item-name: <!i><gray>Mahjong Hand Tile Hitbox</gray>")
+        appendLine("    item-model: mahjongcraft:mahjong_tile/back")
+        appendLine("    behavior:")
+        appendLine("      type: furniture_item")
+        appendLine("      rules:")
+        appendLine("        ground:")
+        appendLine("          rotation: four")
+        appendLine("          alignment: center")
+        appendLine("      furniture:")
+        appendLine("        settings:")
+        appendLine("          item: mahjongpaper:hand_tile_hitbox")
+        appendLine("          hit-times: 1")
+        appendLine("        variants:")
+        appendLine("          ground:")
+        appendLine("            elements:")
+        appendLine("              - item: mahjongpaper:back")
+        appendLine("                display-transform: none")
+        appendLine("                billboard: fixed")
+        appendLine("                position: 0,0,0")
+        appendLine("                translation: 0,-16,0")
+        appendLine("                shadow-radius: 0")
+        appendLine("                shadow-strength: 0")
+        appendLine("            hitboxes:")
+        appendLine("              - type: interaction")
+        appendLine("                position: 0,0,0")
+        appendLine("                width: 0.14")
+        appendLine("                height: 0.18")
+        appendLine("                blocks-building: false")
+        appendLine("                interactive: true")
+        appendLine("                invisible: true")
         tileNames.forEach { tileName ->
             appendLine("  mahjongpaper:$tileName:")
             appendLine("    material: paper")
@@ -286,7 +321,6 @@ val generateCraftEngineBundle = tasks.register("generateCraftEngineBundle") {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    compileOnly("com.github.retrooper:packetevents-spigot:$packetEventsVersion")
     implementation("io.github.ssttkkl:mahjong-utils-jvm:$mahjongUtilsVersion")
     implementation("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
     implementation("com.h2database:h2:$h2Version")

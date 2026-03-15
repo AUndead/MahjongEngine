@@ -2,6 +2,11 @@ package doublemoon.mahjongcraft.paper.render;
 
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import net.kyori.adventure.text.Component;
+import java.util.Collection;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -9,6 +14,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.TextDisplay;
@@ -18,10 +24,6 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
-import java.util.Collection;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class DisplayEntities {
     private static final String ITEM_MODEL_NAMESPACE = "mahjongcraft";
@@ -60,6 +62,7 @@ public final class DisplayEntities {
         }
 
         ItemDisplay display = world.spawn(location, ItemDisplay.class, spawned -> {
+            boolean privateOnly = privateViewers != null && !privateViewers.isEmpty();
             spawned.setPersistent(false);
             spawned.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
             spawned.setInterpolationDuration(1);
@@ -71,7 +74,7 @@ public final class DisplayEntities {
             spawned.setDisplayWidth(0.4F);
             spawned.setDisplayHeight(0.6F);
             spawned.setRotation(yaw, 0.0F);
-            spawned.setVisibleByDefault(visibleByDefault);
+            spawned.setVisibleByDefault(!privateOnly && visibleByDefault);
             spawned.setTransformation(new Transformation(
                 new Vector3f(),
                 new AxisAngle4f((float) Math.toRadians(pose.xRotationDegrees()), 1.0F, 0.0F, 0.0F),
@@ -86,6 +89,7 @@ public final class DisplayEntities {
         }
         if (privateViewers != null && !privateViewers.isEmpty()) {
             DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+            syncPrivateVisibility(plugin, display, privateViewers);
         }
         registerForCraftEngineCulling(plugin, display);
         return display;
@@ -102,6 +106,7 @@ public final class DisplayEntities {
         }
 
         TextDisplay display = world.spawn(location, TextDisplay.class, spawned -> {
+            boolean privateOnly = privateViewers != null && !privateViewers.isEmpty();
             spawned.setPersistent(false);
             spawned.text(text);
             spawned.setSeeThrough(false);
@@ -112,10 +117,11 @@ public final class DisplayEntities {
             spawned.setViewRange(LABEL_VIEW_RANGE);
             spawned.setBrightness(new Display.Brightness(15, 15));
             spawned.setBackgroundColor(color);
-            spawned.setVisibleByDefault(true);
+            spawned.setVisibleByDefault(!privateOnly);
         });
         if (privateViewers != null && !privateViewers.isEmpty()) {
             DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+            syncPrivateVisibility(plugin, display, privateViewers);
         }
         registerForCraftEngineCulling(plugin, display);
         return display;
@@ -144,16 +150,19 @@ public final class DisplayEntities {
         }
 
         Interaction interaction = world.spawn(location, Interaction.class, spawned -> {
+            boolean privateOnly = privateViewers != null && !privateViewers.isEmpty();
             spawned.setPersistent(false);
             spawned.setResponsive(true);
             spawned.setInteractionWidth(width);
             spawned.setInteractionHeight(height);
+            spawned.setVisibleByDefault(!privateOnly);
         });
         if (clickAction != null) {
             TableDisplayRegistry.register(interaction.getEntityId(), clickAction);
         }
         if (privateViewers != null && !privateViewers.isEmpty()) {
             DisplayVisibilityRegistry.registerPrivate(interaction.getEntityId(), privateViewers);
+            syncPrivateVisibility(plugin, interaction, privateViewers);
         }
         registerForCraftEngineCulling(plugin, interaction);
         return interaction;
@@ -179,6 +188,7 @@ public final class DisplayEntities {
         }
 
         BlockDisplay display = world.spawn(location, BlockDisplay.class, spawned -> {
+            boolean privateOnly = privateViewers != null && !privateViewers.isEmpty();
             spawned.setPersistent(false);
             spawned.setInterpolationDuration(1);
             spawned.setInterpolationDelay(0);
@@ -186,7 +196,7 @@ public final class DisplayEntities {
             spawned.setViewRange(48.0F);
             spawned.setShadowRadius(0.0F);
             spawned.setShadowStrength(0.0F);
-            spawned.setVisibleByDefault(visibleByDefault);
+            spawned.setVisibleByDefault(!privateOnly && visibleByDefault);
             spawned.setRotation(0.0F, 0.0F);
             spawned.setBlock(material.createBlockData());
             spawned.setTransformation(new Transformation(
@@ -198,9 +208,20 @@ public final class DisplayEntities {
         });
         if (privateViewers != null && !privateViewers.isEmpty()) {
             DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
+            syncPrivateVisibility(plugin, display, privateViewers);
         }
         registerForCraftEngineCulling(plugin, display);
         return display;
+    }
+
+    private static void syncPrivateVisibility(Plugin plugin, Entity entity, Collection<UUID> privateViewers) {
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            if (privateViewers.contains(player.getUniqueId())) {
+                player.showEntity(plugin, entity);
+            } else {
+                player.hideEntity(plugin, entity);
+            }
+        }
     }
 
     private static void registerForCraftEngineCulling(Plugin plugin, org.bukkit.entity.Entity entity) {

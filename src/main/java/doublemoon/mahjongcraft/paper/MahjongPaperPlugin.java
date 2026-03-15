@@ -5,7 +5,6 @@ import doublemoon.mahjongcraft.paper.compat.CraftEngineService;
 import doublemoon.mahjongcraft.paper.debug.DebugService;
 import doublemoon.mahjongcraft.paper.db.DatabaseService;
 import doublemoon.mahjongcraft.paper.i18n.MessageService;
-import doublemoon.mahjongcraft.paper.packet.PacketEventsBridge;
 import doublemoon.mahjongcraft.paper.render.DisplayVisibilityRegistry;
 import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
@@ -18,7 +17,6 @@ public final class MahjongPaperPlugin extends JavaPlugin {
     private DebugService debug;
     private DatabaseService database;
     private CraftEngineService craftEngine;
-    private PacketEventsBridge packetEventsBridge;
     private MahjongTableManager tableManager;
 
     @Override
@@ -44,8 +42,7 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         }
 
         this.tableManager = new MahjongTableManager(this);
-        this.packetEventsBridge = new PacketEventsBridge(this, this.tableManager);
-        this.packetEventsBridge.enable();
+        this.craftEngine.enableFurnitureInteractionBridge(this.tableManager);
         this.tableManager.loadPersistentTables();
 
         MahjongCommand mahjongCommand = new MahjongCommand(this, this.tableManager);
@@ -74,10 +71,8 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         TableDisplayRegistry.clear();
         DisplayVisibilityRegistry.clear();
         if (this.craftEngine != null) {
+            this.craftEngine.disableFurnitureInteractionBridge();
             this.craftEngine.clearTrackedCullables();
-        }
-        if (this.packetEventsBridge != null) {
-            this.packetEventsBridge.disable();
         }
         if (this.database != null) {
             this.database.close();

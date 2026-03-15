@@ -3,12 +3,11 @@ main: doublemoon.mahjongcraft.paper.MahjongPaperPlugin
 loader: doublemoon.mahjongcraft.paper.MahjongPaperLoader
 version: ${version}
 api-version: "1.21.11"
-description: Riichi Mahjong Paper plugin rewrite built around display entities, item_model and PacketEvents.
+description: Riichi Mahjong Paper plugin rewrite built around display entities, item_model and CraftEngine.
 authors:
   - OpenAI
 dependencies:
   server:
-    packetevents:
+    CraftEngine:
       load: BEFORE
       required: true
-      join-classpath: true

@@ -4,7 +4,7 @@
 
 - Paper 的 `ItemDisplay` 与 `TextDisplay`
 - 搭配资源包使用的 `ItemMeta#setItemModel(...)`
-- 使用 PacketEvents 处理牌点击交互数据包
+- 使用 CraftEngine 处理家具交互与实体裁剪
 
 ## 当前状态
 
@@ -19,11 +19,11 @@
 - 荒牌流局时支持流局满贯判定
 - 基于显示实体的牌桌渲染与隐藏信息手牌显示
 - 本人可见正面手牌，其他玩家可见背面手牌
-- 基于 PacketEvents 的点击打牌交互
+- 基于 CraftEngine 的点击打牌交互
 - 自动结算界面与可点击反应提示
 - 开局前规则配置与大厅摘要显示
 - 空位自动补本地 Bot
-- 观战模式，包含基于数据包的私有 overlay 与私有手牌/正面可见性控制
+- 观战模式，包含私有 overlay 与私有手牌/正面可见性控制
 - 按玩家本地化的 HUD、回合提示与结算消息
 - 基于 MiniMessage 的玩家消息，默认提供 `zh-CN`，英文作为回退
 - 命令输出与结算界面的本地化数字格式化
@@ -72,7 +72,7 @@
 .\gradlew.bat build
 ```
 
-由于在 `plugin.yml` 中声明了依赖，服务器运行时需要安装 PacketEvents。
+由于在 `plugin.yml` 中声明了依赖，服务器运行时需要安装 CraftEngine。
 
 当前构建产物为 thin jar。运行时依赖由 [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml) 中声明的 Paper 插件加载器解析；`plugin.yml` 仍然保留用于命令和权限注册。
 
@@ -81,10 +81,9 @@
 当前分支推荐的运行组合：
 
 - Paper
-- PacketEvents
 - CraftEngine
 
-即使没有 CraftEngine，MahjongPaper 仍然可以运行；但按当前实现，接入 CraftEngine 才能获得更完整的表现。桌子碰撞会导出成 CraftEngine furniture，显示实体裁剪也会桥接到 CraftEngine 的 tracked-entity culling，而不再使用 MahjongPaper 早期那套本地裁剪服务。
+按当前实现，MahjongPaper 运行时需要 CraftEngine。桌子碰撞会导出成 CraftEngine furniture，显示实体裁剪会桥接到 CraftEngine 的 tracked-entity culling，手牌点击交互也已经切换到 CraftEngine 家具交互，不再依赖旧的 PacketEvents 桥接。
 
 ## 资源包
 
@@ -124,4 +123,4 @@
 
 - `MahjongCraft`：玩法逻辑与资源来源
 - `Paper`：显示实体与 `item_model` API
-- `PacketEvents`：交互数据包桥接
+- `CraftEngine`：自定义物品、家具碰撞、实体裁剪与交互桥接

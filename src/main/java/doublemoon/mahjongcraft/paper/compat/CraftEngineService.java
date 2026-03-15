@@ -2,7 +2,10 @@ package doublemoon.mahjongcraft.paper.compat;
 
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
+import doublemoon.mahjongcraft.paper.render.DisplayClickAction;
 import doublemoon.mahjongcraft.paper.render.DisplayVisibilityRegistry;
+import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
@@ -24,6 +27,13 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.Event;
+import org.bukkit.event.EventException;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.plugin.EventExecutor;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
@@ -33,6 +43,7 @@ public final class CraftEngineService {
     private static final String BUNDLE_INDEX = BUNDLE_ROOT + "/_bundle_index.txt";
     private static final String CRAFT_ENGINE_PLUGIN_NAME = "CraftEngine";
     private static final String TABLE_HITBOX_ITEM_ID = "mahjongpaper:table_hitbox";
+    private static final String HAND_TILE_HITBOX_ITEM_ID = "mahjongpaper:hand_tile_hitbox";
 
     private final MahjongPaperPlugin plugin;
     private final boolean exportBundleOnEnable;
@@ -45,6 +56,7 @@ public final class CraftEngineService {
     private volatile boolean furnitureReflectionUnavailable;
     private volatile boolean cullingReflectionUnavailable;
     private volatile ReflectionBridge reflectionBridge;
+    private Listener furnitureInteractListener;
 
     public CraftEngineService(MahjongPaperPlugin plugin, ConfigurationSection section) {
         this.plugin = plugin;
@@ -108,6 +120,18 @@ public final class CraftEngineService {
     }
 
     public Entity placeTableHitbox(Location location) {
+        return this.placeFurniture(location, TABLE_HITBOX_ITEM_ID);
+    }
+
+    public Entity placeHandTileHitbox(Location location, DisplayClickAction action) {
+        Entity entity = this.placeFurniture(location, HAND_TILE_HITBOX_ITEM_ID);
+        if (entity != null && action != null) {
+            TableDisplayRegistry.register(entity.getEntityId(), action);
+        }
+        return entity;
+    }
+
+    private Entity placeFurniture(Location location, String furnitureItemId) {
         if (!this.preferFurnitureHitbox || this.furnitureReflectionUnavailable) {
             return null;
         }
@@ -121,7 +145,7 @@ public final class CraftEngineService {
             ClassLoader classLoader = craftEngine.getClass().getClassLoader();
             Class<?> keyClass = Class.forName("net.momirealms.craftengine.core.util.Key", true, classLoader);
             Class<?> furnitureClass = Class.forName("net.momirealms.craftengine.bukkit.api.CraftEngineFurniture", true, classLoader);
-            Object key = keyClass.getMethod("of", String.class).invoke(null, TABLE_HITBOX_ITEM_ID);
+            Object key = keyClass.getMethod("of", String.class).invoke(null, furnitureItemId);
             Object furniture = furnitureClass.getMethod("place", Location.class, keyClass).invoke(null, location, key);
             if (furniture == null) {
                 return null;
@@ -131,13 +155,98 @@ public final class CraftEngineService {
         } catch (ReflectiveOperationException | RuntimeException exception) {
             this.furnitureReflectionUnavailable = true;
             this.plugin.getLogger().warning(
-                "CraftEngine was detected, but MahjongPaper could not place CraftEngine furniture hitboxes. Table collision will be disabled."
+                "CraftEngine was detected, but MahjongPaper could not place CraftEngine furniture. CraftEngine-based interaction may be unavailable."
             );
             this.plugin.debug().log(
                 "lifecycle",
                 "CraftEngine furniture bridge failed: " + exception.getClass().getSimpleName() + ": " + exception.getMessage()
             );
             return null;
+        }
+    }
+
+    public void enableFurnitureInteractionBridge(MahjongTableManager tableManager) {
+        if (this.furnitureInteractListener != null) {
+            return;
+        }
+        Plugin craftEngine = this.findCraftEnginePlugin();
+        if (craftEngine == null || !craftEngine.isEnabled()) {
+            this.plugin.getLogger().warning("CraftEngine interaction bridge is unavailable because CraftEngine is not enabled.");
+            return;
+        }
+        try {
+            ClassLoader classLoader = craftEngine.getClass().getClassLoader();
+            Class<? extends Event> eventClass = Class.forName(
+                "net.momirealms.craftengine.bukkit.api.event.FurnitureInteractEvent",
+                true,
+                classLoader
+            ).asSubclass(Event.class);
+            Method playerMethod = eventClass.getMethod("player");
+            Method furnitureMethod = eventClass.getMethod("furniture");
+            Method entityIdMethod = furnitureMethod.getReturnType().getMethod("entityId");
+            Listener listener = new Listener() {
+            };
+            EventExecutor executor = (ignored, event) -> this.handleFurnitureInteractEvent(
+                event,
+                tableManager,
+                playerMethod,
+                furnitureMethod,
+                entityIdMethod
+            );
+            this.plugin.getServer().getPluginManager().registerEvent(
+                eventClass,
+                listener,
+                EventPriority.NORMAL,
+                executor,
+                this.plugin,
+                true
+            );
+            this.furnitureInteractListener = listener;
+        } catch (ReflectiveOperationException exception) {
+            this.plugin.getLogger().warning(
+                "CraftEngine was detected, but MahjongPaper could not register the furniture interaction bridge. Tile clicking will not use CraftEngine."
+            );
+            this.plugin.debug().log(
+                "lifecycle",
+                "CraftEngine interaction bridge failed: " + exception.getClass().getSimpleName() + ": " + exception.getMessage()
+            );
+        }
+    }
+
+    public void disableFurnitureInteractionBridge() {
+        if (this.furnitureInteractListener != null) {
+            HandlerList.unregisterAll(this.furnitureInteractListener);
+            this.furnitureInteractListener = null;
+        }
+    }
+
+    private void handleFurnitureInteractEvent(
+        Event event,
+        MahjongTableManager tableManager,
+        Method playerMethod,
+        Method furnitureMethod,
+        Method entityIdMethod
+    ) throws EventException {
+        try {
+            Player player = (Player) playerMethod.invoke(event);
+            Object furniture = furnitureMethod.invoke(event);
+            int entityId = (int) entityIdMethod.invoke(furniture);
+            DisplayClickAction action = TableDisplayRegistry.get(entityId);
+            if (action == null) {
+                return;
+            }
+            if (event instanceof Cancellable cancellable) {
+                cancellable.setCancelled(true);
+            }
+            if (!action.ownerId().equals(player.getUniqueId())) {
+                return;
+            }
+            boolean accepted = tableManager.clickTile(player, action.tableId(), action.ownerId(), action.tileIndex());
+            if (!accepted) {
+                this.plugin.messages().actionBar(player, "packet.cannot_click_tile");
+            }
+        } catch (ReflectiveOperationException exception) {
+            throw new EventException(exception);
         }
     }
 

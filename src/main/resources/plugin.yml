@@ -3,9 +3,9 @@ main: doublemoon.mahjongcraft.paper.MahjongPaperPlugin
 version: ${version}
 api-version: "1.21.11"
 author: OpenAI
-description: Riichi Mahjong Paper plugin rewrite built around display entities, item_model and PacketEvents.
+description: Riichi Mahjong Paper plugin rewrite built around display entities, item_model and CraftEngine.
 depend:
-  - packetevents
+  - CraftEngine
 commands:
   mahjong:
     description: Manage MahjongPaper tables and rounds. Use /mahjong help for command explanations.

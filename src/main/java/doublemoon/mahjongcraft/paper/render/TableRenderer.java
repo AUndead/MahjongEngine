@@ -334,14 +334,13 @@ public final class TableRenderer {
             true,
             ownerOnly
         ));
-        spawned.add(DisplayEntities.spawnInteraction(
-            session.plugin(),
+        Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
             handInteractionLocation(tileLocation),
-            HAND_INTERACTION_WIDTH,
-            HAND_INTERACTION_HEIGHT,
-            new DisplayClickAction(session.id(), playerId, tileIndex),
-            ownerOnly
-        ));
+            new DisplayClickAction(session.id(), playerId, tileIndex)
+        );
+        if (clickHitbox != null) {
+            spawned.add(clickHitbox);
+        }
         return spawned;
     }
 
