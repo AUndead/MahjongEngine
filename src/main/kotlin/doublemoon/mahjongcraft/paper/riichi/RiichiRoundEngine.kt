@@ -575,10 +575,10 @@ class RiichiRoundEngine(
                 }
             } else {
                 val tenpaiCount = seats.count { it.isTenpai }
-                if (tenpaiCount == 0) {
+                if (tenpaiCount == 0 || tenpaiCount == seats.size) {
                     seats.forEach { add(ScoreItem(it.displayName, it.uuid, it.points, 0)) }
                 } else {
-                    val notenCount = 4 - tenpaiCount
+                    val notenCount = seats.size - tenpaiCount
                     val notenBappu = 3000 / notenCount
                     val bappuGet = 3000 / tenpaiCount
                     seats.forEach {

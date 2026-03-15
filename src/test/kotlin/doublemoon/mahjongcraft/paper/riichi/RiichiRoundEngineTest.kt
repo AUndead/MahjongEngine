@@ -1,6 +1,8 @@
 package doublemoon.mahjongcraft.paper.riichi
 
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule
+import doublemoon.mahjongcraft.paper.riichi.model.MahjongTile
+import doublemoon.mahjongcraft.paper.riichi.model.TileInstance
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -42,5 +44,33 @@ class RiichiRoundEngineTest {
         )
 
         assertTrue(engine.seats.all { it.points == 32000 })
+    }
+
+    @Test
+    fun `normal draw with all players tenpai does not divide by zero`() {
+        val players = listOf(
+            RiichiPlayerState("A", "a"),
+            RiichiPlayerState("B", "b"),
+            RiichiPlayerState("C", "c"),
+            RiichiPlayerState("D", "d")
+        )
+        val engine = RiichiRoundEngine(players, MahjongRule())
+
+        engine.startRound()
+        engine.seats.forEach { player ->
+            player.hands.clear()
+            repeat(if (player == engine.currentPlayer) 14 else 13) { index ->
+                player.hands += TileInstance(mahjongTile = if (index % 2 == 0) MahjongTile.M1 else MahjongTile.P1)
+            }
+        }
+        engine.wall.clear()
+
+        val result = engine.discard(engine.currentPlayer.uuid, 0)
+
+        assertTrue(result)
+        val scoreChanges = engine.lastResolution?.scoreSettlement?.scoreList?.map { it.scoreChange }
+        if (scoreChanges != null) {
+            assertEquals(0, scoreChanges.sum())
+        }
     }
 }
