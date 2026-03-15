@@ -60,6 +60,9 @@ public final class MahjongTableManager implements Listener {
         }
         session.removePlayer(owner.getUniqueId());
         this.playerTables.remove(owner.getUniqueId());
+        while (session.size() < 4) {
+            session.addBot();
+        }
         session.addSpectator(owner);
         this.spectatorTables.put(owner.getUniqueId(), id);
         session.startRound();
