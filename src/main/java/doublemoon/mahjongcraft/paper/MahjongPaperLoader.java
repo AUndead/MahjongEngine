@@ -14,10 +14,10 @@ public final class MahjongPaperLoader implements PluginLoader {
         resolver.addRepository(new RemoteRepository.Builder(
             "central",
             "default",
-            "https://repo1.maven.org/maven2/"
+            MavenLibraryResolver.MAVEN_CENTRAL_DEFAULT_MIRROR
         ).build());
 
-        this.addDependency(resolver, "io.github.ssttkkl:mahjong-utils:0.7.7");
+        this.addDependency(resolver, "io.github.ssttkkl:mahjong-utils-jvm:0.7.7");
         this.addDependency(resolver, "org.mariadb.jdbc:mariadb-java-client:3.5.3");
         this.addDependency(resolver, "com.h2database:h2:2.3.232");
         this.addDependency(resolver, "com.zaxxer:HikariCP:6.3.0");

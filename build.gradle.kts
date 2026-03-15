@@ -28,7 +28,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:$packetEventsVersion")
-    implementation("io.github.ssttkkl:mahjong-utils:$mahjongUtilsVersion")
+    implementation("io.github.ssttkkl:mahjong-utils-jvm:$mahjongUtilsVersion")
     implementation("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
     implementation("com.h2database:h2:$h2Version")
     implementation("com.zaxxer:HikariCP:$hikariVersion")

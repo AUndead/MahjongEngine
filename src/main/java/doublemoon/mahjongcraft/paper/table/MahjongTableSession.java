@@ -382,6 +382,22 @@ public final class MahjongTableSession {
         return "Seats " + this.size() + "/4 | Bots " + this.botCount() + " | Spectators " + this.spectatorCount() + " | " + this.ruleSummary();
     }
 
+    public String waitingDisplaySummary() {
+        return "Seats " + this.size() + "/4"
+            + " | Bots " + this.botCount()
+            + " | Specs " + this.spectatorCount();
+    }
+
+    public String ruleDisplaySummary() {
+        MahjongRule rule = this.currentRule();
+        return rule.getLength().name()
+            + " | " + rule.getThinkingTime().name()
+            + " | red=" + rule.getRedFive().name()
+            + " | minHan=" + rule.getMinimumHan().name()
+            + " | start=" + rule.getStartingPoints()
+            + " | goal=" + rule.getMinPointsToWin();
+    }
+
     public String ruleSummary() {
         MahjongRule rule = this.currentRule();
         return "length=" + rule.getLength().name()
@@ -615,7 +631,7 @@ public final class MahjongTableSession {
                 locale,
                 "overlay.waiting",
                 this.plugin.messages().tag("table_id", this.id),
-                this.plugin.messages().tag("summary", this.waitingSummary())
+                this.plugin.messages().tag("summary", this.waitingDisplaySummary())
             );
         }
         if (!this.engine.getStarted()) {
@@ -908,7 +924,7 @@ public final class MahjongTableSession {
                 locale,
                 "hud.waiting",
                 this.plugin.messages().tag("table_id", this.id),
-                this.plugin.messages().tag("summary", this.waitingSummary())
+                this.plugin.messages().tag("summary", this.waitingDisplaySummary())
             );
         }
         if (this.engine.getGameFinished() && this.engine.getLastResolution() != null) {
@@ -980,7 +996,7 @@ public final class MahjongTableSession {
             + ':' + this.isSpectator(viewerId)
             + ':' + this.isStarted()
             + ':' + Objects.toString(this.engine == null ? null : this.engine.getLastResolution(), "")
-            + ':' + (this.engine == null ? this.waitingSummary() : this.roundDisplay() + ':' + this.engine.getWall().size() + ':' + this.engine.getCurrentPlayerIndex());
+            + ':' + (this.engine == null ? this.waitingDisplaySummary() + ':' + this.ruleDisplaySummary() : this.roundDisplay() + ':' + this.engine.getWall().size() + ':' + this.engine.getCurrentPlayerIndex());
     }
 
     private String viewerOverlayFingerprint(Player viewer) {
@@ -990,7 +1006,8 @@ public final class MahjongTableSession {
             + ':' + this.isSpectator(viewer.getUniqueId())
             + ':' + this.nextRoundSecondsRemaining()
             + ':' + Objects.toString(this.engine == null ? null : this.engine.getLastResolution(), "")
-            + ':' + this.waitingSummary()
+            + ':' + this.waitingDisplaySummary()
+            + ':' + this.ruleDisplaySummary()
             + ':' + (this.engine == null ? "no-engine" : this.roundDisplay() + ':' + this.engine.getWall().size() + ':' + this.engine.getCurrentPlayerIndex()
                 + ':' + Objects.toString(this.engine.availableReactions(viewer.getUniqueId().toString()), "") + ':' + this.spectatorSeatFingerprint());
     }
@@ -1167,7 +1184,7 @@ public final class MahjongTableSession {
     private String centerFingerprint() {
         return this.isStarted()
             ? "center:started:" + this.roundDisplay() + ':' + this.remainingWall().size() + ':' + this.dicePoints() + ':' + this.dealerName() + ':' + this.currentSeat().name()
-            : "center:waiting:" + this.waitingSummary();
+            : "center:waiting:" + this.waitingDisplaySummary() + ':' + this.ruleDisplaySummary();
     }
 
     private String seatLabelFingerprint(SeatWind wind) {

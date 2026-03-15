@@ -16,13 +16,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import kotlin.Pair;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 
-public final class MahjongCommand implements CommandExecutor, TabCompleter {
+public final class MahjongCommand implements BasicCommand {
     private final MahjongPaperPlugin plugin;
     private final MessageService messages;
     private final MahjongTableManager tableManager;
@@ -34,15 +33,19 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public void execute(CommandSourceStack stack, String[] args) {
+        this.handleCommand(stack.getSender(), args);
+    }
+
+    private void handleCommand(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
             this.messages.send(sender, "common.only_players");
-            return true;
+            return;
         }
 
         if (args.length == 0) {
             this.sendHelp(player);
-            return true;
+            return;
         }
 
         String sub = args[0].toLowerCase(Locale.ROOT);
@@ -57,7 +60,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "join" -> {
                 if (args.length < 2) {
                     this.messages.send(player, "command.join_usage");
-                    return true;
+                    return;
                 }
                 MahjongTableSession table = this.tableManager.join(player, args[1]);
                 if (table == null) {
@@ -70,12 +73,12 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
                 MahjongTableSession current = this.tableManager.sessionForViewer(player.getUniqueId());
                 if (current == null) {
                     this.messages.send(player, "command.not_in_table");
-                    return true;
+                    return;
                 }
                 MahjongTableSession table = this.tableManager.leave(player.getUniqueId());
                 if (table != null) {
                     this.messages.send(player, "command.left_table");
-                    return true;
+                    return;
                 }
                 MahjongTableSession spectatorTable = this.tableManager.unspectate(player.getUniqueId());
                 this.messages.send(player, spectatorTable == null ? "command.leave_blocked_started" : "command.unspectated");
@@ -83,7 +86,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "list" -> {
                 if (this.tableManager.tables().isEmpty()) {
                     this.messages.send(player, "command.no_active_tables");
-                    return true;
+                    return;
                 }
                 Locale locale = this.messages.resolveLocale(player);
                 this.tableManager.tables().forEach(table -> player.sendMessage(this.messages.render(
@@ -99,7 +102,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "spectate" -> {
                 if (args.length < 2) {
                     this.messages.send(player, "command.spectate_usage");
-                    return true;
+                    return;
                 }
                 MahjongTableSession table = this.tableManager.spectate(player, args[1]);
                 if (table == null) {
@@ -115,29 +118,29 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "addbot" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.addBot() ? "command.bot_added" : "command.bot_add_failed");
             }
             case "removebot" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.removeBot() ? "command.bot_removed" : "command.bot_remove_failed");
             }
             case "rule" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 if (args.length == 1) {
                     this.messages.send(player, "command.rule_summary", this.messages.tag("summary", table.ruleSummary()));
-                    return true;
+                    return;
                 }
                 if (args.length < 3) {
                     this.messages.send(player, "command.rule_usage");
-                    return true;
+                    return;
                 }
                 this.messages.send(
                     player,
@@ -156,7 +159,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "state" -> {
                 MahjongTableSession table = requireViewedTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 player.sendMessage(table.stateSummary(player));
             }
@@ -164,7 +167,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
                 MahjongTableSession table = requireTable(player);
                 if (table == null || args.length < 2) {
                     this.messages.send(player, "command.riichi_usage");
-                    return true;
+                    return;
                 }
                 java.util.OptionalInt index = parseIndex(args[1]);
                 this.messages.send(player, index.isPresent() && table.declareRiichi(player.getUniqueId(), index.getAsInt())
@@ -174,7 +177,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "tsumo" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.declareTsumo(player.getUniqueId()) ? "command.tsumo_success" : "command.tsumo_failed");
             }
@@ -185,7 +188,7 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "chii" -> {
                 if (args.length < 3) {
                     this.messages.send(player, "command.chii_usage");
-                    return true;
+                    return;
                 }
                 try {
                     MahjongTile first = MahjongTile.valueOf(args[1].toUpperCase(Locale.ROOT));
@@ -199,28 +202,28 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
                 MahjongTableSession table = requireTable(player);
                 if (table == null || args.length < 2) {
                     this.messages.send(player, "command.kan_usage");
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.declareKan(player.getUniqueId(), args[1]) ? "command.kan_success" : "command.kan_failed");
             }
             case "kyuushu", "kyuushukyuuhai" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.declareKyuushuKyuuhai(player.getUniqueId()) ? "command.kyuushu_success" : "command.kyuushu_failed");
             }
             case "settlement" -> {
                 MahjongTableSession table = requireViewedTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 this.messages.send(player, table.openSettlementUi(player) ? "command.settlement_opened" : "command.settlement_unavailable");
             }
             case "render" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 table.render();
                 this.messages.send(player, "command.rendered");
@@ -228,19 +231,18 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             case "clear" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
-                    return true;
+                    return;
                 }
                 table.clearDisplays();
                 this.messages.send(player, "command.cleared");
             }
             default -> this.sendHelp(player);
         }
-
-        return true;
     }
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+    public List<String> suggest(CommandSourceStack stack, String[] args) {
+        CommandSender sender = stack.getSender();
         if (args.length == 1) {
             return matchPrefix(
                 args[0],
@@ -277,6 +279,16 @@ public final class MahjongCommand implements CommandExecutor, TabCompleter {
             return matchPrefix(args[1], suggestedRiichiIndices(player));
         }
         return List.of();
+    }
+
+    @Override
+    public boolean canUse(CommandSender sender) {
+        return sender.hasPermission(this.permission());
+    }
+
+    @Override
+    public String permission() {
+        return "mahjongpaper.command";
     }
 
     private MahjongTableSession requireTable(Player player) {

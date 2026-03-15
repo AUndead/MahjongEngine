@@ -10,7 +10,6 @@ import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
 import java.util.Objects;
 import java.util.logging.Level;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class MahjongPaperPlugin extends JavaPlugin {
@@ -45,14 +44,12 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         this.packetEventsBridge = new PacketEventsBridge(this, this.tableManager);
         this.packetEventsBridge.enable();
 
-        PluginCommand command = this.getCommand("mahjong");
-        if (command == null) {
-            throw new IllegalStateException("Command 'mahjong' is not defined in plugin.yml");
-        }
-
         MahjongCommand mahjongCommand = new MahjongCommand(this, this.tableManager);
-        command.setExecutor(mahjongCommand);
-        command.setTabCompleter(mahjongCommand);
+        this.registerCommand(
+            "mahjong",
+            "Manage MahjongPaper tables and rounds. Use /mahjong help for command explanations.",
+            mahjongCommand
+        );
 
         this.getServer().getPluginManager().registerEvents(this.tableManager, this);
         this.getLogger().info("MahjongPaper enabled.");

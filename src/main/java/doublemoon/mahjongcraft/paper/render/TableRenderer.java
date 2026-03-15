@@ -45,19 +45,21 @@ public final class TableRenderer {
         Location handBase = seatBase(center, wind, HAND_RADIUS);
         boolean active = session.currentSeat() == wind;
         String status = playerId == null
-            ? "[" + wind.displayName() + "] Empty"
-            : "[" + wind.displayName() + "] " + session.points(playerId) + " pts" + (session.isRiichi(playerId) ? " Riichi" : "");
+            ? "[" + wind.displayName() + "] Empty seat"
+            : "[" + wind.displayName() + "] " + session.points(playerId) + " pts" + (session.isRiichi(playerId) ? " | Riichi" : "");
 
         spawned.add(DisplayEntities.spawnLabel(
             handBase.clone().add(0.0D, 0.45D, 0.0D),
             Component.text(status),
             seatLabelColor(wind, active)
         ));
-        spawned.add(DisplayEntities.spawnLabel(
-            handBase.clone().add(0.0D, 0.26D, 0.0D),
-            Component.text(session.displayName(playerId)),
-            Color.fromARGB(100, 18, 18, 18)
-        ));
+        if (playerId != null) {
+            spawned.add(DisplayEntities.spawnLabel(
+                handBase.clone().add(0.0D, 0.26D, 0.0D),
+                Component.text(session.displayName(playerId)),
+                Color.fromARGB(100, 18, 18, 18)
+            ));
+        }
         return spawned;
     }
 
@@ -66,10 +68,9 @@ public final class TableRenderer {
         int wallCount = session.remainingWall().size();
         List<Entity> spawned = new ArrayList<>(wallCount);
         for (int i = 0; i < wallCount; i++) {
-            int side = i / 17;
-            int sideIndex = i % 17;
-            int layer = (i / 68) % 2;
-            SeatWind wind = SeatWind.fromIndex(side);
+            SeatWind wind = WallLayout.wallSeat(i);
+            int sideIndex = WallLayout.wallColumn(i);
+            int layer = WallLayout.wallLayer(i);
             Location wallBase = seatBase(center, wind, WALL_RADIUS);
             Location tileLocation = offsetAlongSeat(wallBase, wind, centeredOffset(17, sideIndex, WALL_STEP))
                 .add(0.0D, layer * 0.08D, 0.0D);
@@ -93,8 +94,8 @@ public final class TableRenderer {
         Location center = displayCenter(session);
         int wallCount = session.remainingWall().size();
         String text = session.isStarted()
-            ? session.roundDisplay() + " | Wall " + wallCount + " | Dice " + session.dicePoints() + " | Dealer " + session.dealerName()
-            : "Waiting | " + session.waitingSummary();
+            ? session.roundDisplay() + "\nWall " + wallCount + " | Dice " + session.dicePoints() + " | Dealer " + session.dealerName()
+            : "Mahjong Table " + session.id() + "\n" + session.waitingDisplaySummary() + "\n" + session.ruleDisplaySummary();
         return List.of(DisplayEntities.spawnLabel(
             center.clone().add(0.0D, 0.3D, 0.0D),
             Component.text(text),
@@ -106,12 +107,14 @@ public final class TableRenderer {
         Location center = displayCenter(session);
         UUID viewerId = viewer.getUniqueId();
         List<Entity> spawned = new ArrayList<>(session.isSpectator(viewerId) ? 5 : 1);
-        spawned.add(DisplayEntities.spawnLabel(
-            center.clone().add(0.0D, 0.9D, 0.0D),
-            session.viewerOverlay(viewer),
-            Color.fromARGB(84, 12, 12, 12),
-            List.of(viewerId)
-        ));
+        if (session.isStarted() || session.isSpectator(viewerId)) {
+            spawned.add(DisplayEntities.spawnLabel(
+                center.clone().add(0.0D, 0.9D, 0.0D),
+                session.viewerOverlay(viewer),
+                Color.fromARGB(84, 12, 12, 12),
+                List.of(viewerId)
+            ));
+        }
         if (session.isSpectator(viewerId)) {
             for (SeatWind wind : SeatWind.values()) {
                 spawned.add(DisplayEntities.spawnLabel(
