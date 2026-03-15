@@ -160,11 +160,18 @@ public final class TableRenderer {
                 yaw,
                 hand.get(i),
                 false,
-                clickAction,
+                null,
                 true,
                 ownerOnly
             );
             spawned.add(privateDisplay);
+            spawned.add(DisplayEntities.spawnInteraction(
+                tileLocation.clone().add(0.0D, 0.02D, 0.0D),
+                0.32F,
+                0.48F,
+                clickAction,
+                ownerOnly
+            ));
         }
         return spawned;
     }

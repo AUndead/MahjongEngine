@@ -9,6 +9,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.Interaction;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -116,6 +117,31 @@ public final class DisplayEntities {
             DisplayVisibilityRegistry.registerPrivate(display.getEntityId(), privateViewers);
         }
         return display;
+    }
+
+    public static Interaction spawnInteraction(
+        Location location,
+        float width,
+        float height,
+        DisplayClickAction clickAction,
+        Collection<UUID> privateViewers
+    ) {
+        World world = location.getWorld();
+        if (world == null) {
+            throw new IllegalArgumentException("Location world is null");
+        }
+
+        Interaction interaction = world.spawn(location, Interaction.class, spawned -> {
+            spawned.setPersistent(false);
+            spawned.setResponsive(true);
+            spawned.setInteractionWidth(width);
+            spawned.setInteractionHeight(height);
+        });
+        TableDisplayRegistry.register(interaction.getEntityId(), clickAction);
+        if (privateViewers != null && !privateViewers.isEmpty()) {
+            DisplayVisibilityRegistry.registerPrivate(interaction.getEntityId(), privateViewers);
+        }
+        return interaction;
     }
 
     private static ItemStack tileItem(MahjongTile tile, boolean faceDown) {

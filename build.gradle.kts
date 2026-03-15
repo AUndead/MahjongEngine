@@ -1,3 +1,6 @@
+import org.gradle.api.GradleException
+import java.io.File
+
 plugins {
     java
     jacoco
@@ -17,12 +20,158 @@ val h2Version = "2.3.232"
 val hikariVersion = "6.3.0"
 val adventureVersion = "4.17.0"
 val junitVersion = "5.12.2"
+val generatedResourcesDir = layout.buildDirectory.dir("generated/resources/mahjong")
+
+fun jsonString(value: String): String = buildString {
+    append('"')
+    value.forEach { character ->
+        when (character) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append(character)
+        }
+    }
+    append('"')
+}
+
+fun parseMahjongTileNames(sourceFile: File): List<String> {
+    val enumBody = sourceFile.readText(Charsets.UTF_8)
+        .substringAfter("public enum MahjongTile {")
+        .substringBefore(";")
+
+    return enumBody
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { it.substringBefore('\n').trim() }
+        .map { it.lowercase() }
+}
+
+fun writeMessageIndex(inputDir: File, outputFile: File, defaultLocale: String) {
+    val bundleFiles = inputDir.walkTopDown().filter { it.isFile && it.name.matches(Regex("""messages.*\.properties""")) }.sortedBy { it.name }.toList()
+    val bundles = linkedMapOf<String, String>()
+    if (bundleFiles.none { it.name == "messages.properties" }) {
+        throw GradleException("Expected src/main/resources/messages.properties to exist.")
+    }
+    bundles["en"] = "messages.properties"
+    bundleFiles
+        .filter { it.name != "messages.properties" }
+        .forEach { file ->
+            val localeTag = file.name.removePrefix("messages_").removeSuffix(".properties").replace('_', '-')
+            bundles[localeTag] = file.name
+        }
+    if (!bundles.containsKey(defaultLocale)) {
+        throw GradleException("Default locale $defaultLocale is missing from generated message bundles.")
+    }
+
+    val json = buildString {
+        appendLine("{")
+        appendLine("  \"defaultLocale\": ${jsonString(defaultLocale)},")
+        appendLine("  \"bundles\": {")
+        bundles.entries.forEachIndexed { index, entry ->
+            val suffix = if (index + 1 == bundles.size) "" else ","
+            appendLine("    ${jsonString(entry.key)}: ${jsonString(entry.value)}$suffix")
+        }
+        appendLine("  }")
+        appendLine("}")
+    }
+
+    outputFile.parentFile.mkdirs()
+    outputFile.writeText(json, Charsets.UTF_8)
+}
+
+fun writeMahjongTileResourceIndex(enumSource: File, itemsDir: File, modelsDir: File, texturesDir: File, outputFile: File) {
+    val expectedEntries = parseMahjongTileNames(enumSource).toMutableSet().apply {
+        add("back")
+    }.sorted()
+
+    val itemFiles = itemsDir.walkTopDown().filter { it.isFile && it.extension == "json" }.associateBy { it.nameWithoutExtension }
+    val modelFiles = modelsDir.walkTopDown().filter { it.isFile && it.extension == "json" }.associateBy {
+        it.nameWithoutExtension.removePrefix("mahjong_tile_")
+    }
+    val textureFiles = texturesDir.walkTopDown().filter { it.isFile && it.extension == "png" }.associateBy {
+        it.nameWithoutExtension.removePrefix("mahjong_tile_")
+    }
+
+    val missingItems = expectedEntries.filterNot(itemFiles.keys::contains)
+    val missingModels = expectedEntries.filterNot(modelFiles.keys::contains)
+    val missingTextures = expectedEntries.filterNot(textureFiles.keys::contains)
+    if (missingItems.isNotEmpty() || missingModels.isNotEmpty() || missingTextures.isNotEmpty()) {
+        throw GradleException(
+            buildString {
+                append("Mahjong tile resources are out of sync.")
+                if (missingItems.isNotEmpty()) append(" missing items=$missingItems")
+                if (missingModels.isNotEmpty()) append(" missing models=$missingModels")
+                if (missingTextures.isNotEmpty()) append(" missing textures=$missingTextures")
+            }
+        )
+    }
+
+    expectedEntries.forEach { entry ->
+        val itemText = itemFiles.getValue(entry).readText(Charsets.UTF_8)
+        val modelText = modelFiles.getValue(entry).readText(Charsets.UTF_8)
+        val expectedModelPath = "mahjongcraft:item/mahjong_tile/mahjong_tile_$entry"
+        if (!itemText.contains(expectedModelPath)) {
+            throw GradleException("Item definition for $entry does not point at $expectedModelPath")
+        }
+        if (!modelText.contains("\"0\": \"mahjongcraft:item/mahjong_tile/mahjong_tile_$entry\"")) {
+            throw GradleException("Model definition for $entry does not point at mahjongcraft:item/mahjong_tile/mahjong_tile_$entry")
+        }
+    }
+
+    val json = buildString {
+        appendLine("{")
+        appendLine("  \"namespace\": \"mahjongcraft\",")
+        appendLine("  \"kind\": \"mahjong_tile\",")
+        appendLine("  \"entries\": [")
+        expectedEntries.forEachIndexed { index, entry ->
+            val suffix = if (index + 1 == expectedEntries.size) "" else ","
+            appendLine(
+                "    {\"name\": ${jsonString(entry)}, \"item\": ${jsonString("mahjongcraft:mahjong_tile/$entry")}, \"model\": ${jsonString("mahjongcraft:item/mahjong_tile/mahjong_tile_$entry")}, \"texture\": ${jsonString("mahjongcraft:item/mahjong_tile/mahjong_tile_$entry")}}$suffix"
+            )
+        }
+        appendLine("  ]")
+        appendLine("}")
+    }
+
+    outputFile.parentFile.mkdirs()
+    outputFile.writeText(json, Charsets.UTF_8)
+}
 
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.codemc.io/repository/maven-releases/")
     maven("https://jitpack.io")
+}
+
+val generateMessageIndex = tasks.register("generateMessageIndex") {
+    val inputDir = layout.projectDirectory.dir("src/main/resources").asFile
+    val outputFile = generatedResourcesDir.map { it.file("i18n/_index.json") }.get().asFile
+    inputs.dir(inputDir)
+    outputs.file(outputFile)
+    doLast {
+        writeMessageIndex(inputDir, outputFile, "zh-CN")
+    }
+}
+
+val verifyMahjongTileResources = tasks.register("verifyMahjongTileResources") {
+    val enumSource = layout.projectDirectory.file("src/main/java/doublemoon/mahjongcraft/paper/model/MahjongTile.java").asFile
+    val itemsDir = layout.projectDirectory.dir("resourcepack/assets/mahjongcraft/items/mahjong_tile").asFile
+    val modelsDir = layout.projectDirectory.dir("resourcepack/assets/mahjongcraft/models/item/mahjong_tile").asFile
+    val texturesDir = layout.projectDirectory.dir("resourcepack/assets/mahjongcraft/textures/item/mahjong_tile").asFile
+    val outputFile = generatedResourcesDir.map { it.file("resourcepack/mahjong_tile_index.json") }.get().asFile
+    inputs.file(enumSource)
+    inputs.dir(itemsDir)
+    inputs.dir(modelsDir)
+    inputs.dir(texturesDir)
+    outputs.file(outputFile)
+    doLast {
+        writeMahjongTileResourceIndex(enumSource, itemsDir, modelsDir, texturesDir, outputFile)
+    }
 }
 
 dependencies {
@@ -61,7 +210,9 @@ tasks {
     }
 
     processResources {
+        dependsOn(generateMessageIndex, verifyMahjongTileResources)
         filteringCharset = Charsets.UTF_8.name()
+        from(generatedResourcesDir)
         filesMatching(listOf("plugin.yml", "paper-plugin.yml")) {
             expand(
                 "version" to project.version,
@@ -91,5 +242,6 @@ tasks {
 
     check {
         dependsOn(jacocoTestReport)
+        dependsOn(verifyMahjongTileResources)
     }
 }
