@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class DisplayEntities {
     private static final String ITEM_MODEL_NAMESPACE = "mahjongcraft";
     private static final float TILE_SCALE = 1.0F;
+    private static final float LABEL_VIEW_RANGE = 48.0F;
     private static final Map<String, ItemStack> TILE_ITEM_CACHE = new ConcurrentHashMap<>();
 
     private DisplayEntities() {
@@ -108,6 +109,7 @@ public final class DisplayEntities {
             spawned.setDefaultBackground(false);
             spawned.setBillboard(Display.Billboard.CENTER);
             spawned.setLineWidth(160);
+            spawned.setViewRange(LABEL_VIEW_RANGE);
             spawned.setBrightness(new Display.Brightness(15, 15));
             spawned.setBackgroundColor(color);
             spawned.setVisibleByDefault(true);
