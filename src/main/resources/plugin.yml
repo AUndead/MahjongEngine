@@ -9,8 +9,10 @@ depend:
 commands:
   mahjong:
     description: Manage MahjongPaper tables and rounds. Use /mahjong help for command explanations.
-    usage: /mahjong <help|create|botmatch|mode|join|leave|list|spectate|unspectate|addbot|removebot|rule|start|state|riichi|tsumo|ron|pon|minkan|chii|kan|skip|kyuushu|settlement|render|clear>
+    usage: /mahjong <help|create|botmatch|mode|join|leave|list|spectate|unspectate|addbot|removebot|rule|start|state|riichi|tsumo|ron|pon|minkan|chii|kan|skip|kyuushu|settlement|render|clear|forceend|deletetable>
     permission: mahjongpaper.command
 permissions:
   mahjongpaper.command:
     default: true
+  mahjongpaper.admin:
+    default: op

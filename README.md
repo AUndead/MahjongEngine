@@ -60,6 +60,8 @@ It is still not fully at feature parity with upstream `MahjongCraft`. The larges
 - `/mahjong settlement`: reopen the latest settlement UI for this table
 - `/mahjong render`: force a table display refresh
 - `/mahjong clear`: remove current display entities for the table
+- `/mahjong forceend [tableId]`: admin command to stop a running match and return the table to waiting state
+- `/mahjong deletetable [tableId]`: admin command to immediately remove a table
 
 Mahjong Soul-style defaults are now used for new tables: 4-player riichi, 25,000 start, 30,000 target, red fives enabled, open tanyao enabled, and final match score calculated with no oka and `+15/+5/-5/-15` placement bonus.
 

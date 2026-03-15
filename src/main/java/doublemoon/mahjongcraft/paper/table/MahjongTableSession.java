@@ -321,6 +321,20 @@ public final class MahjongTableSession {
         this.engine = null;
     }
 
+    public void forceEndMatch() {
+        this.cancelBotTask();
+        this.cancelNextRoundCountdown();
+        this.feedbackState.clear();
+        this.lastSettlementFingerprint = "";
+        this.lastPersistedSettlementFingerprint = "";
+        this.regionFingerprints.clear();
+        this.lastTurnSoundFingerprint = "";
+        this.lastRiichiSoundFingerprint = "";
+        this.lastResolutionSoundFingerprint = "";
+        this.engine = null;
+        this.render();
+    }
+
     public SeatWind currentSeat() {
         if (this.engine == null || !this.engine.getStarted()) {
             return SeatWind.EAST;

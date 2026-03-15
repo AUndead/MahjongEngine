@@ -165,6 +165,34 @@ public final class MahjongTableManager implements Listener {
         session.startRound();
     }
 
+    public MahjongTableSession forceEndTable(String tableId) {
+        MahjongTableSession session = this.resolveTable(tableId);
+        if (session == null) {
+            return null;
+        }
+        this.plugin.debug().log("table", "Force-ended table " + session.id());
+        session.forceEndMatch();
+        return session;
+    }
+
+    public MahjongTableSession deleteTable(String tableId) {
+        MahjongTableSession session = this.resolveTable(tableId);
+        if (session == null) {
+            return null;
+        }
+
+        for (UUID playerId : session.players()) {
+            this.playerTables.remove(playerId);
+        }
+        for (UUID spectatorId : session.spectators()) {
+            this.spectatorTables.remove(spectatorId);
+        }
+        session.shutdown();
+        this.tables.remove(session.id());
+        this.plugin.debug().log("table", "Deleted table " + session.id());
+        return session;
+    }
+
     public boolean clickTile(Player player, String tableId, UUID ownerId, int tileIndex) {
         MahjongTableSession session = this.tables.get(tableId);
         if (session == null || !session.contains(player.getUniqueId()) || !player.getUniqueId().equals(ownerId)) {
@@ -213,6 +241,13 @@ public final class MahjongTableManager implements Listener {
             builder.append(alphabet.charAt(random.nextInt(alphabet.length())));
         }
         return builder.toString();
+    }
+
+    private MahjongTableSession resolveTable(String tableId) {
+        if (tableId == null) {
+            return null;
+        }
+        return this.tables.get(tableId.toUpperCase(Locale.ROOT));
     }
 
     private boolean isViewingAnyTable(UUID playerId) {

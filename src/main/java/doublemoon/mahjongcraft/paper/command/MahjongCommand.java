@@ -71,6 +71,28 @@ public final class MahjongCommand implements BasicCommand {
                     this.messages.tag("mode", preset.toLowerCase(Locale.ROOT))
                 );
             }
+            case "forceend" -> {
+                if (!this.requireAdmin(player)) {
+                    return;
+                }
+                MahjongTableSession target = this.resolveAdminTable(player, args);
+                if (target == null) {
+                    return;
+                }
+                this.tableManager.forceEndTable(target.id());
+                this.messages.send(player, "command.forceend_success", this.messages.tag("table_id", target.id()));
+            }
+            case "deletetable" -> {
+                if (!this.requireAdmin(player)) {
+                    return;
+                }
+                MahjongTableSession target = this.resolveAdminTable(player, args);
+                if (target == null) {
+                    return;
+                }
+                this.tableManager.deleteTable(target.id());
+                this.messages.send(player, "command.deletetable_success", this.messages.tag("table_id", target.id()));
+            }
             case "mode" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
@@ -282,13 +304,18 @@ public final class MahjongCommand implements BasicCommand {
         if (args.length == 1) {
             return matchPrefix(
                 args[0],
-                List.of("help", "create", "botmatch", "mode", "join", "leave", "list", "spectate", "unspectate", "addbot", "removebot", "rule", "start", "state", "riichi", "tsumo", "ron", "pon", "minkan", "chii", "kan", "skip", "kyuushu", "settlement", "render", "clear")
+                List.of("help", "create", "botmatch", "mode", "join", "leave", "list", "spectate", "unspectate", "addbot", "removebot", "rule", "start", "state", "riichi", "tsumo", "ron", "pon", "minkan", "chii", "kan", "skip", "kyuushu", "settlement", "render", "clear", "forceend", "deletetable")
             );
         }
         if (!(sender instanceof Player player)) {
             return List.of();
         }
 
+        if (args.length == 2 && ("forceend".equalsIgnoreCase(args[0]) || "deletetable".equalsIgnoreCase(args[0]))) {
+            List<String> ids = new ArrayList<>();
+            this.tableManager.tables().forEach(table -> ids.add(table.id()));
+            return matchPrefix(args[1], ids);
+        }
         if (args.length == 2 && "botmatch".equalsIgnoreCase(args[0])) {
             return matchPrefix(args[1], List.of("MAJSOUL_HANCHAN", "MAJSOUL_TONPUU", "hanchan", "tonpuu"));
         }
@@ -370,7 +397,9 @@ public final class MahjongCommand implements BasicCommand {
             "command.help.kyuushu",
             "command.help.settlement",
             "command.help.render",
-            "command.help.clear"
+            "command.help.clear",
+            "command.help.forceend",
+            "command.help.deletetable"
         };
         for (String key : keys) {
             player.sendMessage(this.messages.render(locale, key));
@@ -398,6 +427,32 @@ public final class MahjongCommand implements BasicCommand {
             ok ? "command.reaction_submitted" : "command.reaction_failed",
             this.messages.tag("action", action)
         );
+    }
+
+    private boolean requireAdmin(Player player) {
+        if (player.hasPermission("mahjongpaper.admin")) {
+            return true;
+        }
+        this.messages.send(player, "command.admin_required");
+        return false;
+    }
+
+    private MahjongTableSession resolveAdminTable(Player player, String[] args) {
+        if (args.length >= 2) {
+            for (MahjongTableSession table : this.tableManager.tables()) {
+                if (table.id().equalsIgnoreCase(args[1])) {
+                    return table;
+                }
+            }
+            this.messages.send(player, "command.table_not_found", this.messages.tag("table_id", args[1]));
+            return null;
+        }
+
+        MahjongTableSession table = this.tableManager.sessionForViewer(player.getUniqueId());
+        if (table == null) {
+            this.messages.send(player, "command.admin_table_required");
+        }
+        return table;
     }
 
     private java.util.OptionalInt parseIndex(String raw) {
