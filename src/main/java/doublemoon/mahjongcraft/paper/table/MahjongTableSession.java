@@ -2300,6 +2300,8 @@ public final class MahjongTableSession {
             .field("center")
             .field(snapshot.started() ? "started" : "waiting")
             .field(snapshot.publicCenterText())
+            .field(snapshot.lastPublicDiscardPlayerId())
+            .field(snapshot.lastPublicDiscardTile())
             .toString();
     }
 
@@ -2866,7 +2868,7 @@ public final class MahjongTableSession {
                 this.plugin.messages().number(locale, "wall", this.remainingWall().size()),
                 this.plugin.messages().number(locale, "dice", this.dicePoints()),
                 this.plugin.messages().tag("dealer", this.dealerName(locale)),
-                this.plugin.messages().tag("last_discard", this.lastDiscardSummary(locale))
+                this.plugin.messages().tag("last_discard", this.centerLastDiscardSummary(locale))
             );
         }
         return this.plugin.messages().plain(
@@ -2876,6 +2878,10 @@ public final class MahjongTableSession {
             this.plugin.messages().tag("summary", this.waitingDisplaySummary(locale)),
             this.plugin.messages().tag("rules", this.ruleDisplaySummary(locale))
         );
+    }
+
+    public doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile() {
+        return this.lastPublicDiscardTile;
     }
 
     private String roundWindText(Locale locale) {
@@ -2931,6 +2937,17 @@ public final class MahjongTableSession {
             "table.last_discard",
             this.plugin.messages().tag("player", this.displayName(this.lastPublicDiscardPlayerId, locale)),
             this.plugin.messages().tag("tile", this.tileLabel(locale, this.lastPublicDiscardTile.name()))
+        );
+    }
+
+    private String centerLastDiscardSummary(Locale locale) {
+        if (this.lastPublicDiscardPlayerId == null || this.lastPublicDiscardTile == null) {
+            return this.plugin.messages().plain(locale, "table.last_discard_none");
+        }
+        return this.plugin.messages().plain(
+            locale,
+            "table.last_discard_player",
+            this.plugin.messages().tag("player", this.displayName(this.lastPublicDiscardPlayerId, locale))
         );
     }
 

@@ -38,6 +38,8 @@ public final class TableRenderer {
     private static final double DISPLAY_CENTER_Y_OFFSET = 0.52D;
     private static final double TABLE_VISUAL_Y_OFFSET = 0.5D;
     private static final double FLOATING_TEXT_Y_OFFSET = 1.0D;
+    private static final double CENTER_LABEL_Y_OFFSET = 0.3D + FLOATING_TEXT_Y_OFFSET - 0.5D;
+    private static final double CENTER_LAST_DISCARD_TILE_Y_OFFSET = CENTER_LABEL_Y_OFFSET - 0.28D;
     private static final double WALL_DIRECTION_OFFSET = 1.0D;
     private static final double HAND_DIRECTION_OFFSET = WALL_DIRECTION_OFFSET + TILE_DEPTH + TILE_HEIGHT;
     private static final double HALF_TABLE_LENGTH_NO_BORDER = 0.5D + 15.0D / 16.0D;
@@ -486,12 +488,23 @@ public final class TableRenderer {
 
     public List<Entity> renderCenterLabel(MahjongTableSession session) {
         Location center = displayCenter(session);
-        return List.of(DisplayEntities.spawnLabel(
+        List<Entity> spawned = new ArrayList<>(2);
+        spawned.add(DisplayEntities.spawnLabel(
             session.plugin(),
-            center.clone().add(0.0D, 0.3D + FLOATING_TEXT_Y_OFFSET, 0.0D),
+            center.clone().add(0.0D, CENTER_LABEL_Y_OFFSET, 0.0D),
             Component.text(session.publicCenterText()),
             Color.fromARGB(112, 20, 80, 20)
         ));
+        if (session.lastPublicDiscardTile() != null) {
+            spawned.add(spawnPublicTile(
+                session,
+                center.clone().add(0.0D, CENTER_LAST_DISCARD_TILE_Y_OFFSET, 0.0D),
+                0.0F,
+                session.lastPublicDiscardTile(),
+                DisplayEntities.TileRenderPose.FLAT_FACE_UP
+            ));
+        }
+        return List.copyOf(spawned);
     }
 
     public List<Entity> renderCenterLabel(
@@ -499,12 +512,24 @@ public final class TableRenderer {
         MahjongTableSession.RenderSnapshot snapshot,
         TableRenderLayout.LayoutPlan plan
     ) {
-        return List.of(DisplayEntities.spawnLabel(
+        Location center = toLocation(session, plan.displayCenter());
+        List<Entity> spawned = new ArrayList<>(2);
+        spawned.add(DisplayEntities.spawnLabel(
             session.plugin(),
-            toLocation(session, plan.displayCenter()).add(0.0D, 0.3D + FLOATING_TEXT_Y_OFFSET, 0.0D),
+            center.clone().add(0.0D, CENTER_LABEL_Y_OFFSET, 0.0D),
             Component.text(snapshot.publicCenterText()),
             Color.fromARGB(112, 20, 80, 20)
         ));
+        if (snapshot.lastPublicDiscardTile() != null) {
+            spawned.add(spawnPublicTile(
+                session,
+                center.clone().add(0.0D, CENTER_LAST_DISCARD_TILE_Y_OFFSET, 0.0D),
+                0.0F,
+                snapshot.lastPublicDiscardTile(),
+                DisplayEntities.TileRenderPose.FLAT_FACE_UP
+            ));
+        }
+        return List.copyOf(spawned);
     }
 
     public List<Entity> renderViewerOverlay(MahjongTableSession session, Player viewer) {
