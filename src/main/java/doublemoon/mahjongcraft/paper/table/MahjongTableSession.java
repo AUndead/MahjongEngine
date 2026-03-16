@@ -92,7 +92,7 @@ public final class MahjongTableSession {
     public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, MahjongRule configuredRule, boolean persistentRoom) {
         this.plugin = plugin;
         this.id = id;
-        this.center = center.clone();
+        this.center = normalizedTableCenter(center);
         this.configuredRule = copyRule(configuredRule);
         this.persistentRoom = persistentRoom;
     }
@@ -110,7 +110,7 @@ public final class MahjongTableSession {
     }
 
     public Location center() {
-        return this.center.clone();
+        return normalizedTableCenter(this.center);
     }
 
     public MahjongRule configuredRuleSnapshot() {
@@ -399,15 +399,17 @@ public final class MahjongTableSession {
         this.spawnMarker(viewer, centerMarker, Color.fromRGB(0, 255, 80), 18);
         this.spawnMarker(viewer, anchorMarker, Color.fromRGB(255, 70, 70), 18);
 
-        double maxX = diagnostics.visualAnchor().getX() + diagnostics.borderSpanX();
-        double maxZ = diagnostics.visualAnchor().getZ() + diagnostics.borderSpanZ();
+        double minX = diagnostics.visualAnchor().getX() - diagnostics.borderSpanX() / 2.0D;
+        double maxX = diagnostics.visualAnchor().getX() + diagnostics.borderSpanX() / 2.0D;
+        double minZ = diagnostics.visualAnchor().getZ() - diagnostics.borderSpanZ() / 2.0D;
+        double maxZ = diagnostics.visualAnchor().getZ() + diagnostics.borderSpanZ() / 2.0D;
         World world = diagnostics.visualAnchor().getWorld();
         if (world == null) {
             return;
         }
-        this.spawnMarker(viewer, new Location(world, diagnostics.visualAnchor().getX(), centerMarker.getY(), diagnostics.visualAnchor().getZ()), Color.fromRGB(255, 180, 60), 10);
-        this.spawnMarker(viewer, new Location(world, maxX, centerMarker.getY(), diagnostics.visualAnchor().getZ()), Color.fromRGB(255, 180, 60), 10);
-        this.spawnMarker(viewer, new Location(world, diagnostics.visualAnchor().getX(), centerMarker.getY(), maxZ), Color.fromRGB(255, 180, 60), 10);
+        this.spawnMarker(viewer, new Location(world, minX, centerMarker.getY(), minZ), Color.fromRGB(255, 180, 60), 10);
+        this.spawnMarker(viewer, new Location(world, maxX, centerMarker.getY(), minZ), Color.fromRGB(255, 180, 60), 10);
+        this.spawnMarker(viewer, new Location(world, minX, centerMarker.getY(), maxZ), Color.fromRGB(255, 180, 60), 10);
         this.spawnMarker(viewer, new Location(world, maxX, centerMarker.getY(), maxZ), Color.fromRGB(255, 180, 60), 10);
     }
 
@@ -2174,6 +2176,13 @@ public final class MahjongTableSession {
             true,
             false
         );
+    }
+
+    private static Location normalizedTableCenter(Location source) {
+        Location normalized = source.clone();
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
     }
 
     public static final class FinalStanding {
