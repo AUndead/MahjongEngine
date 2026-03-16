@@ -435,6 +435,13 @@ public final class TableRenderer {
         return spawned;
     }
 
+    public List<Entity> renderWallTile(MahjongTableSession session, TableRenderLayout.LayoutPlan plan, int wallIndex) {
+        if (!session.isStarted() || wallIndex < 0 || wallIndex >= plan.wallTiles().size()) {
+            return List.of();
+        }
+        return List.of(spawnPublicTile(session, plan.wallTiles().get(wallIndex)));
+    }
+
     public List<Entity> renderSticks(
         MahjongTableSession session,
         MahjongTableSession.SeatRenderSnapshot seat,
@@ -672,6 +679,30 @@ public final class TableRenderer {
             ));
         }
         return spawned;
+    }
+
+    public List<Entity> renderHandPublicTile(
+        MahjongTableSession session,
+        MahjongTableSession.RenderSnapshot snapshot,
+        MahjongTableSession.SeatRenderSnapshot seat,
+        TableRenderLayout.SeatLayoutPlan plan,
+        int tileIndex
+    ) {
+        if (seat.playerId() == null || tileIndex < 0 || tileIndex >= seat.hand().size()) {
+            return List.of();
+        }
+
+        boolean concealHand = snapshot.started();
+        return List.of(DisplayEntities.spawnTileDisplay(
+            session.plugin(),
+            toLocation(session, plan.publicHandPoints().get(tileIndex)),
+            plan.yaw(),
+            concealHand ? MahjongTile.UNKNOWN : seat.hand().get(tileIndex),
+            DisplayEntities.TileRenderPose.STANDING,
+            null,
+            true,
+            seat.viewerIdsExcluding()
+        ));
     }
 
     public List<Entity> renderMelds(MahjongTableSession session, SeatWind wind) {
