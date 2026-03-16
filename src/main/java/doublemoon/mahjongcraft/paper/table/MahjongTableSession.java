@@ -539,38 +539,16 @@ public final class MahjongTableSession {
         if (viewer == null || !viewer.isOnline()) {
             return;
         }
-        Locale locale = this.plugin.messages().resolveLocale(viewer);
-        TableRenderer.TableDiagnostics tableDiagnostics = this.renderer.inspectTable(this);
-        this.highlightTableDiagnostics(viewer, tableDiagnostics);
-        for (TableRenderer.StickDiagnostics stickDiagnostics : this.renderer.inspectSticks(this)) {
-            this.highlightStickDiagnostics(viewer, stickDiagnostics);
-            viewer.sendMessage(this.plugin.messages().render(
-                locale,
-                "command.inspect_stick",
-                this.plugin.messages().tag("kind", this.plugin.messages().plain(locale, stickDiagnostics.riichi() ? "command.inspect.kind.riichi" : "command.inspect.kind.stick")),
-                this.plugin.messages().tag("wind", this.seatDisplayName(stickDiagnostics.wind(), locale)),
-                this.plugin.messages().tag("index", stickDiagnostics.index() >= 0 ? "#" + stickDiagnostics.index() : ""),
-                this.plugin.messages().tag("furniture_id", stickDiagnostics.furnitureId()),
-                this.plugin.messages().tag("location", this.formatLocation(stickDiagnostics.center())),
-                this.plugin.messages().tag("axis", this.plugin.messages().plain(locale, stickDiagnostics.longOnX() ? "command.inspect.axis.x" : "command.inspect.axis.z"))
-            ));
+        InspectRenderSnapshot snapshot = this.captureInspectRenderSnapshot(this.plugin.messages().resolveLocale(viewer));
+        this.highlightTableDiagnostics(viewer, snapshot.table());
+        for (StickInspectSnapshot stick : snapshot.sticks()) {
+            this.highlightStickDiagnostics(viewer, stick);
+            viewer.sendMessage(stick.message());
         }
-        viewer.sendMessage(this.plugin.messages().render(
-            locale,
-            "command.inspect_summary",
-            this.plugin.messages().tag("table_id", this.id()),
-            this.plugin.messages().tag("center", this.formatLocation(tableDiagnostics.tableCenter())),
-            this.plugin.messages().tag("anchor", this.formatLocation(tableDiagnostics.visualAnchor())),
-            this.plugin.messages().tag("span_x", formatDecimal(tableDiagnostics.borderSpanX())),
-            this.plugin.messages().tag("span_z", formatDecimal(tableDiagnostics.borderSpanZ()))
-        ));
-        this.plugin.debug().log(
-            "render",
-            "Inspect table=" + this.id
-                + " center=" + this.formatLocation(tableDiagnostics.tableCenter())
-                + " anchor=" + this.formatLocation(tableDiagnostics.visualAnchor())
-                + " span=" + formatDecimal(tableDiagnostics.borderSpanX()) + "x" + formatDecimal(tableDiagnostics.borderSpanZ())
-        );
+        viewer.sendMessage(snapshot.summaryMessage());
+        for (String debugLine : snapshot.debugLines()) {
+            this.plugin.debug().log("render", debugLine);
+        }
     }
 
     private void removeAllDisplays() {
@@ -599,17 +577,82 @@ public final class MahjongTableSession {
         this.regionFingerprints.remove(regionKey);
     }
 
-    private void highlightTableDiagnostics(Player viewer, TableRenderer.TableDiagnostics diagnostics) {
-        Location centerMarker = diagnostics.tableCenter().clone().add(0.0D, 1.02D, 0.0D);
-        Location anchorMarker = diagnostics.visualAnchor().clone().add(0.0D, 1.02D, 0.0D);
+    private InspectRenderSnapshot captureInspectRenderSnapshot(Locale locale) {
+        TableRenderer.TableDiagnostics tableDiagnostics = this.renderer.inspectTable(this);
+        TableInspectSnapshot table = this.captureTableInspectSnapshot(locale, tableDiagnostics);
+        List<StickInspectSnapshot> sticks = new ArrayList<>();
+        List<String> debugLines = new ArrayList<>();
+        debugLines.add(table.debugLine());
+        for (TableRenderer.StickDiagnostics stickDiagnostics : this.renderer.inspectSticks(this)) {
+            StickInspectSnapshot stickSnapshot = this.captureStickInspectSnapshot(locale, stickDiagnostics);
+            sticks.add(stickSnapshot);
+            debugLines.add(stickSnapshot.debugLine());
+        }
+        return new InspectRenderSnapshot(
+            table,
+            List.copyOf(sticks),
+            table.summaryMessage(),
+            List.copyOf(debugLines)
+        );
+    }
+
+    private TableInspectSnapshot captureTableInspectSnapshot(Locale locale, TableRenderer.TableDiagnostics diagnostics) {
+        String center = this.formatLocation(diagnostics.tableCenter());
+        String anchor = this.formatLocation(diagnostics.visualAnchor());
+        String spanX = formatDecimal(diagnostics.borderSpanX());
+        String spanZ = formatDecimal(diagnostics.borderSpanZ());
+        Component summaryMessage = this.plugin.messages().render(
+            locale,
+            "command.inspect_summary",
+            this.plugin.messages().tag("table_id", this.id()),
+            this.plugin.messages().tag("center", center),
+            this.plugin.messages().tag("anchor", anchor),
+            this.plugin.messages().tag("span_x", spanX),
+            this.plugin.messages().tag("span_z", spanZ)
+        );
+        String debugLine = "Inspect table=" + this.id
+            + " center=" + center
+            + " anchor=" + anchor
+            + " span=" + spanX + "x" + spanZ;
+        return new TableInspectSnapshot(diagnostics, summaryMessage, debugLine);
+    }
+
+    private StickInspectSnapshot captureStickInspectSnapshot(Locale locale, TableRenderer.StickDiagnostics diagnostics) {
+        String kind = this.plugin.messages().plain(locale, diagnostics.riichi() ? "command.inspect.kind.riichi" : "command.inspect.kind.stick");
+        String wind = this.seatDisplayName(diagnostics.wind(), locale);
+        String index = diagnostics.index() >= 0 ? "#" + diagnostics.index() : "";
+        String location = this.formatLocation(diagnostics.center());
+        String axis = this.plugin.messages().plain(locale, diagnostics.longOnX() ? "command.inspect.axis.x" : "command.inspect.axis.z");
+        Component message = this.plugin.messages().render(
+            locale,
+            "command.inspect_stick",
+            this.plugin.messages().tag("kind", kind),
+            this.plugin.messages().tag("wind", wind),
+            this.plugin.messages().tag("index", index),
+            this.plugin.messages().tag("furniture_id", diagnostics.furnitureId()),
+            this.plugin.messages().tag("location", location),
+            this.plugin.messages().tag("axis", axis)
+        );
+        String debugLine = "Inspect table=" + this.id
+            + " stick=" + diagnostics.furnitureId()
+            + " wind=" + diagnostics.wind().name()
+            + " riichi=" + diagnostics.riichi()
+            + " center=" + location
+            + " axis=" + (diagnostics.longOnX() ? "X" : "Z");
+        return new StickInspectSnapshot(diagnostics, message, debugLine);
+    }
+
+    private void highlightTableDiagnostics(Player viewer, TableInspectSnapshot diagnostics) {
+        Location centerMarker = diagnostics.diagnostics().tableCenter().clone().add(0.0D, 1.02D, 0.0D);
+        Location anchorMarker = diagnostics.diagnostics().visualAnchor().clone().add(0.0D, 1.02D, 0.0D);
         this.spawnMarker(viewer, centerMarker, Color.fromRGB(0, 255, 80), 18);
         this.spawnMarker(viewer, anchorMarker, Color.fromRGB(255, 70, 70), 18);
 
-        double minX = diagnostics.visualAnchor().getX() - diagnostics.borderSpanX() / 2.0D;
-        double maxX = diagnostics.visualAnchor().getX() + diagnostics.borderSpanX() / 2.0D;
-        double minZ = diagnostics.visualAnchor().getZ() - diagnostics.borderSpanZ() / 2.0D;
-        double maxZ = diagnostics.visualAnchor().getZ() + diagnostics.borderSpanZ() / 2.0D;
-        World world = diagnostics.visualAnchor().getWorld();
+        double minX = diagnostics.diagnostics().visualAnchor().getX() - diagnostics.diagnostics().borderSpanX() / 2.0D;
+        double maxX = diagnostics.diagnostics().visualAnchor().getX() + diagnostics.diagnostics().borderSpanX() / 2.0D;
+        double minZ = diagnostics.diagnostics().visualAnchor().getZ() - diagnostics.diagnostics().borderSpanZ() / 2.0D;
+        double maxZ = diagnostics.diagnostics().visualAnchor().getZ() + diagnostics.diagnostics().borderSpanZ() / 2.0D;
+        World world = diagnostics.diagnostics().visualAnchor().getWorld();
         if (world == null) {
             return;
         }
@@ -619,31 +662,22 @@ public final class MahjongTableSession {
         this.spawnMarker(viewer, new Location(world, maxX, centerMarker.getY(), maxZ), Color.fromRGB(255, 180, 60), 10);
     }
 
-    private void highlightStickDiagnostics(Player viewer, TableRenderer.StickDiagnostics diagnostics) {
-        Color color = diagnostics.riichi() ? Color.fromRGB(255, 255, 255) : switch (diagnostics.stick()) {
+    private void highlightStickDiagnostics(Player viewer, StickInspectSnapshot diagnostics) {
+        Color color = diagnostics.diagnostics().riichi() ? Color.fromRGB(255, 255, 255) : switch (diagnostics.diagnostics().stick()) {
             case P100 -> Color.fromRGB(255, 70, 70);
             case P5000 -> Color.fromRGB(255, 210, 60);
             case P10000 -> Color.fromRGB(60, 220, 120);
             default -> Color.fromRGB(240, 240, 240);
         };
-        this.spawnMarker(viewer, diagnostics.center().clone().add(0.0D, 0.04D, 0.0D), color, 12);
+        this.spawnMarker(viewer, diagnostics.diagnostics().center().clone().add(0.0D, 0.04D, 0.0D), color, 12);
         for (double offset = -1.0D; offset <= 1.0D; offset += 0.25D) {
-            Location point = diagnostics.center().clone().add(
-                diagnostics.longOnX() ? 0.20D * offset : 0.0D,
+            Location point = diagnostics.diagnostics().center().clone().add(
+                diagnostics.diagnostics().longOnX() ? 0.20D * offset : 0.0D,
                 0.04D,
-                diagnostics.longOnX() ? 0.0D : 0.20D * offset
+                diagnostics.diagnostics().longOnX() ? 0.0D : 0.20D * offset
             );
             this.spawnMarker(viewer, point, color, 4);
         }
-        this.plugin.debug().log(
-            "render",
-            "Inspect table=" + this.id
-                + " stick=" + diagnostics.furnitureId()
-                + " wind=" + diagnostics.wind().name()
-                + " riichi=" + diagnostics.riichi()
-                + " center=" + this.formatLocation(diagnostics.center())
-                + " axis=" + (diagnostics.longOnX() ? "X" : "Z")
-        );
     }
 
     private void spawnMarker(Player viewer, Location location, Color color, int count) {
@@ -2665,6 +2699,28 @@ public final class MahjongTableSession {
         SeatWind wind,
         Component overlay,
         String signature
+    ) {
+    }
+
+    private record InspectRenderSnapshot(
+        TableInspectSnapshot table,
+        List<StickInspectSnapshot> sticks,
+        Component summaryMessage,
+        List<String> debugLines
+    ) {
+    }
+
+    private record TableInspectSnapshot(
+        TableRenderer.TableDiagnostics diagnostics,
+        Component summaryMessage,
+        String debugLine
+    ) {
+    }
+
+    private record StickInspectSnapshot(
+        TableRenderer.StickDiagnostics diagnostics,
+        Component message,
+        String debugLine
     ) {
     }
 
