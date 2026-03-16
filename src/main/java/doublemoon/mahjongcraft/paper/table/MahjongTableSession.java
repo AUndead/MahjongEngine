@@ -521,8 +521,7 @@ public final class MahjongTableSession {
             this.updateRegion(this.seatRegionKey("labels", wind), fingerprints.get(this.seatRegionKey("labels", wind)), () -> this.renderer.renderSeatLabels(this, seat, seatPlan));
             this.updateRegion(this.seatRegionKey("sticks", wind), fingerprints.get(this.seatRegionKey("sticks", wind)), () -> this.renderer.renderSticks(this, seat, seatPlan));
             this.updateRegion(this.seatRegionKey("hand-public", wind), fingerprints.get(this.seatRegionKey("hand-public", wind)), () -> this.renderer.renderHandPublic(this, snapshot, seat, seatPlan));
-            this.clearLegacyHandPrivateTileRegions(wind);
-            this.updateRegion(this.seatRegionKey("hand-private", wind), fingerprints.get(this.seatRegionKey("hand-private", wind)), () -> this.renderer.renderHandPrivate(this, seat, seatPlan));
+            this.updatePrivateHandRegions(seat, seatPlan);
             this.updateRegion(this.seatRegionKey("discards", wind), fingerprints.get(this.seatRegionKey("discards", wind)), () -> this.renderer.renderDiscards(this, seat, seatPlan));
             this.updateRegion(this.seatRegionKey("melds", wind), fingerprints.get(this.seatRegionKey("melds", wind)), () -> this.renderer.renderMelds(this, seat, seatPlan));
         }
@@ -2383,10 +2382,45 @@ public final class MahjongTableSession {
         this.updateRegion(this.seatRegionKey("labels", wind), this.seatLabelFingerprint(wind), () -> this.renderer.renderSeatLabels(this, wind));
         this.updateRegion(this.seatRegionKey("sticks", wind), this.stickFingerprint(wind), () -> this.renderer.renderSticks(this, wind));
         this.updateRegion(this.seatRegionKey("hand-public", wind), this.handPublicFingerprint(wind), () -> this.renderer.renderHandPublic(this, wind));
-        this.clearLegacyHandPrivateTileRegions(wind);
+        this.clearRegion(this.seatRegionKey("hand-private", wind));
         this.updateRegion(this.seatRegionKey("hand-private", wind), this.handPrivateFingerprint(wind), () -> this.renderer.renderHandPrivate(this, wind));
         this.updateRegion(this.seatRegionKey("discards", wind), this.discardFingerprint(wind), () -> this.renderer.renderDiscards(this, wind));
         this.updateRegion(this.seatRegionKey("melds", wind), this.meldFingerprint(wind), () -> this.renderer.renderMelds(this, wind));
+    }
+
+    private void updatePrivateHandRegions(SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan) {
+        this.clearRegion(this.seatRegionKey("hand-private", seat.wind()));
+        int handSize = seat.playerId() == null ? 0 : seat.hand().size();
+        for (int tileIndex = 0; tileIndex < MAX_HAND_TILE_REGIONS; tileIndex++) {
+            String regionKey = this.handPrivateRegionKey(seat.wind(), tileIndex);
+            if (tileIndex >= handSize) {
+                this.clearRegion(regionKey);
+                continue;
+            }
+            int index = tileIndex;
+            this.updateRegion(
+                regionKey,
+                this.handPrivateTileFingerprint(seat, plan, tileIndex),
+                () -> this.renderer.renderHandPrivateTile(this, seat, plan, index)
+            );
+        }
+    }
+
+    private String handPrivateTileFingerprint(SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan, int tileIndex) {
+        TableRenderLayout.Point point = plan.privateHandPoints().get(tileIndex);
+        return fingerprintBuilder(160)
+            .field("hand-private-tile")
+            .field(seat.wind().name())
+            .field(Objects.toString(seat.playerId(), "empty"))
+            .field(tileIndex)
+            .field(seat.online())
+            .field(seat.hand().size())
+            .field(tileIndex == seat.selectedHandTileIndex())
+            .field(Double.doubleToLongBits(point.x()))
+            .field(Double.doubleToLongBits(point.y()))
+            .field(Double.doubleToLongBits(point.z()))
+            .field(seat.hand().get(tileIndex).name())
+            .toString();
     }
 
     private void clearLegacyHandPrivateTileRegions(SeatWind wind) {

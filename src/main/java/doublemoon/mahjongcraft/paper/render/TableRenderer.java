@@ -719,6 +719,39 @@ public final class TableRenderer {
         return spawned;
     }
 
+    public List<Entity> renderHandPrivateTile(
+        MahjongTableSession session,
+        MahjongTableSession.SeatRenderSnapshot seat,
+        TableRenderLayout.SeatLayoutPlan plan,
+        int tileIndex
+    ) {
+        if (seat.playerId() == null || tileIndex < 0 || tileIndex >= seat.hand().size()) {
+            return List.of();
+        }
+
+        Location tileLocation = toLocation(session, plan.privateHandPoints().get(tileIndex));
+        UUID playerId = seat.playerId();
+        List<Entity> spawned = new ArrayList<>(2);
+        spawned.add(DisplayEntities.spawnTileDisplay(
+            session.plugin(),
+            tileLocation,
+            plan.yaw(),
+            seat.hand().get(tileIndex),
+            DisplayEntities.TileRenderPose.STANDING,
+            null,
+            true,
+            List.of(playerId)
+        ));
+        Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
+            handInteractionLocation(tileLocation),
+            DisplayClickAction.handTile(session.id(), playerId, tileIndex)
+        );
+        if (clickHitbox != null) {
+            spawned.add(clickHitbox);
+        }
+        return spawned;
+    }
+
     public List<Entity> renderHandPublic(
         MahjongTableSession session,
         MahjongTableSession.RenderSnapshot snapshot,
