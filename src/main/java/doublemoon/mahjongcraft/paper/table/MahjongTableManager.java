@@ -279,6 +279,16 @@ public final class MahjongTableManager implements Listener {
         this.persistentTableStore.save(this.tables.values());
     }
 
+    public void refreshPersistentTablesAfterStartup() {
+        for (MahjongTableSession session : this.tables.values()) {
+            if (!session.isPersistentRoom()) {
+                continue;
+            }
+            this.cleanupLoadedTableArtifactsIfNeeded(session);
+            session.render();
+        }
+    }
+
     public MahjongTableSession.ReadyResult start(Player player) {
         MahjongTableSession session = this.tableFor(player.getUniqueId());
         if (session == null) {

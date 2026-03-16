@@ -61,7 +61,7 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         this.getServer().getScheduler().runTask(this, () -> {
             this.craftEngine.initializeAfterStartup();
             if (this.tableManager != null) {
-                this.tableManager.tables().forEach(table -> table.render());
+                this.tableManager.refreshPersistentTablesAfterStartup();
             }
         });
         this.getLogger().info("MahjongPaper enabled.");
