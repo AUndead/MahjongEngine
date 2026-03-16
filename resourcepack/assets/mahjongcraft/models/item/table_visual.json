@@ -1,0 +1,96 @@
+{
+  "credit": "Generated for MahjongPaper CraftEngine furniture",
+  "texture_size": [16, 16],
+  "textures": {
+    "wood": "minecraft:block/dark_oak_log",
+    "stone": "minecraft:block/smooth_stone",
+    "border": "minecraft:block/stripped_oak_log",
+    "particle": "minecraft:block/smooth_stone"
+  },
+  "elements": [
+    {
+      "from": [16.5, 0, 16.5],
+      "to": [30.5, 2, 30.5],
+      "faces": {
+        "north": {"uv": [0, 0, 14, 2], "texture": "#wood"},
+        "east": {"uv": [0, 0, 14, 2], "texture": "#wood"},
+        "south": {"uv": [0, 0, 14, 2], "texture": "#wood"},
+        "west": {"uv": [0, 0, 14, 2], "texture": "#wood"},
+        "up": {"uv": [0, 0, 14, 14], "texture": "#wood"},
+        "down": {"uv": [0, 0, 14, 14], "texture": "#wood"}
+      }
+    },
+    {
+      "from": [19.5, 2, 19.5],
+      "to": [27.5, 14, 27.5],
+      "faces": {
+        "north": {"uv": [0, 0, 8, 12], "texture": "#wood"},
+        "east": {"uv": [0, 0, 8, 12], "texture": "#wood"},
+        "south": {"uv": [0, 0, 8, 12], "texture": "#wood"},
+        "west": {"uv": [0, 0, 8, 12], "texture": "#wood"},
+        "up": {"uv": [0, 0, 8, 8], "texture": "#wood"},
+        "down": {"uv": [0, 0, 8, 8], "texture": "#wood"}
+      }
+    },
+    {
+      "from": [0.5, 14, 0.5],
+      "to": [46.5, 16, 46.5],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 2], "texture": "#stone"},
+        "east": {"uv": [0, 0, 16, 2], "texture": "#stone"},
+        "south": {"uv": [0, 0, 16, 2], "texture": "#stone"},
+        "west": {"uv": [0, 0, 16, 2], "texture": "#stone"},
+        "up": {"uv": [0, 0, 16, 16], "texture": "#stone"},
+        "down": {"uv": [0, 0, 16, 16], "texture": "#stone"}
+      }
+    },
+    {
+      "from": [0, 14, 0],
+      "to": [47, 17, 1],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "east": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "south": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "west": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "up": {"uv": [0, 0, 16, 1], "texture": "#border"},
+        "down": {"uv": [0, 0, 16, 1], "texture": "#border"}
+      }
+    },
+    {
+      "from": [0, 14, 46],
+      "to": [47, 17, 47],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "east": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "south": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "west": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "up": {"uv": [0, 0, 16, 1], "texture": "#border"},
+        "down": {"uv": [0, 0, 16, 1], "texture": "#border"}
+      }
+    },
+    {
+      "from": [0, 14, 0],
+      "to": [1, 17, 47],
+      "faces": {
+        "north": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "east": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "south": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "west": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "up": {"uv": [0, 0, 1, 16], "texture": "#border"},
+        "down": {"uv": [0, 0, 1, 16], "texture": "#border"}
+      }
+    },
+    {
+      "from": [46, 14, 0],
+      "to": [47, 17, 47],
+      "faces": {
+        "north": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "east": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "south": {"uv": [0, 0, 1, 3], "texture": "#border"},
+        "west": {"uv": [0, 0, 16, 3], "texture": "#border"},
+        "up": {"uv": [0, 0, 1, 16], "texture": "#border"},
+        "down": {"uv": [0, 0, 1, 16], "texture": "#border"}
+      }
+    }
+  ]
+}

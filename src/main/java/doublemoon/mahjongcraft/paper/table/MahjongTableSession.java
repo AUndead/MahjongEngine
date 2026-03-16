@@ -34,8 +34,10 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
@@ -876,6 +878,7 @@ public final class MahjongTableSession {
     }
 
     public void tick() {
+        this.restoreDisplaysIfNeeded();
         this.updateViewerOverlayRegions();
         this.syncHud();
         if (this.engine == null || this.engine.getStarted() || this.engine.getGameFinished() || this.nextRoundDeadlineMillis <= 0L) {
@@ -1667,6 +1670,11 @@ public final class MahjongTableSession {
     private void updateRegion(String regionKey, String fingerprint, RegionRenderer renderer) {
         String previousFingerprint = this.regionFingerprints.get(regionKey);
         List<Entity> currentEntities = this.regionDisplays.get(regionKey);
+        if (this.hasInvalidDisplayEntity(currentEntities)) {
+            this.removeRegionDisplays(regionKey);
+            previousFingerprint = null;
+            currentEntities = null;
+        }
         if (Objects.equals(previousFingerprint, fingerprint) && (currentEntities != null || this.regionFingerprints.containsKey(regionKey))) {
             return;
         }
@@ -1681,6 +1689,51 @@ public final class MahjongTableSession {
     private void clearRegion(String regionKey) {
         this.removeRegionDisplays(regionKey);
         this.regionFingerprints.remove(regionKey);
+    }
+
+    public boolean isCenteredInChunk(Chunk chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        World world = this.center.getWorld();
+        return world != null
+            && world.equals(chunk.getWorld())
+            && Math.floorDiv(this.center.getBlockX(), 16) == chunk.getX()
+            && Math.floorDiv(this.center.getBlockZ(), 16) == chunk.getZ();
+    }
+
+    private void restoreDisplaysIfNeeded() {
+        if (!this.isCenterChunkLoaded() || !this.hasStaleDisplayRegions()) {
+            return;
+        }
+        this.render();
+    }
+
+    private boolean isCenterChunkLoaded() {
+        World world = this.center.getWorld();
+        return world != null
+            && world.isChunkLoaded(Math.floorDiv(this.center.getBlockX(), 16), Math.floorDiv(this.center.getBlockZ(), 16));
+    }
+
+    private boolean hasStaleDisplayRegions() {
+        for (List<Entity> entities : this.regionDisplays.values()) {
+            if (this.hasInvalidDisplayEntity(entities)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasInvalidDisplayEntity(List<Entity> entities) {
+        if (entities == null || entities.isEmpty()) {
+            return false;
+        }
+        for (Entity entity : entities) {
+            if (entity == null || entity.isDead() || !entity.isValid()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String seatRegionKey(String region, SeatWind wind) {

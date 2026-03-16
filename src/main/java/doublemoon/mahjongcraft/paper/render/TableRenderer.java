@@ -7,6 +7,7 @@ import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
@@ -51,6 +52,9 @@ public final class TableRenderer {
     private static final int DEAD_WALL_SIZE = 14;
     private static final int LIVE_WALL_SIZE = TOTAL_WALL_TILES - DEAD_WALL_SIZE;
     private static final int DISCARDS_PER_ROW = 6;
+    private static final String TABLE_VISUAL_FURNITURE_ID = "mahjongpaper:table_visual";
+    private static final String STICK_FURNITURE_PREFIX = "mahjongpaper:stick_";
+
     public List<Entity> renderTableStructure(MahjongTableSession session) {
         Location center = displayCenter(session);
         TableBounds bounds = tableBoundsFromTiles(center);
@@ -62,6 +66,12 @@ public final class TableRenderer {
         double borderSpanZ = topDepth + TABLE_BORDER_THICKNESS;
         double borderCenterOffsetX = topWidth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
         double borderCenterOffsetZ = topDepth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
+        Entity tableVisual = spawnTableVisual(session, tableCenter, borderSpanX, borderSpanZ);
+        if (tableVisual != null) {
+            spawned.add(tableVisual);
+            spawned.addAll(this.renderTableHitboxes(session, center));
+            return spawned;
+        }
 
         spawned.add(DisplayEntities.spawnBlockDisplay(
             session.plugin(),
@@ -191,15 +201,7 @@ public final class TableRenderer {
             if (kanCount % 2 == 1 && i == liveWallCount - 1) {
                 tileLocation.subtract(0.0D, TILE_DEPTH, 0.0D);
             }
-            spawned.add(DisplayEntities.spawnTileDisplay(
-                session.plugin(),
-                tileLocation,
-                seatYaw(wind),
-                MahjongTile.UNKNOWN,
-                DisplayEntities.TileRenderPose.FLAT_FACE_DOWN,
-                null,
-                true
-            ));
+            spawned.add(spawnPublicTile(session, tileLocation, seatYaw(wind), MahjongTile.UNKNOWN, DisplayEntities.TileRenderPose.FLAT_FACE_DOWN));
         }
 
         for (int i = 0; i < DEAD_WALL_SIZE; i++) {
@@ -207,15 +209,7 @@ public final class TableRenderer {
                 continue;
             }
             DeadWallPlacement placement = deadWallPlacements.get(i);
-            spawned.add(DisplayEntities.spawnTileDisplay(
-                session.plugin(),
-                placement.location(),
-                placement.yaw(),
-                MahjongTile.UNKNOWN,
-                DisplayEntities.TileRenderPose.FLAT_FACE_DOWN,
-                null,
-                true
-            ));
+            spawned.add(spawnPublicTile(session, placement.location(), placement.yaw(), MahjongTile.UNKNOWN, DisplayEntities.TileRenderPose.FLAT_FACE_DOWN));
         }
         return spawned;
     }
@@ -231,15 +225,7 @@ public final class TableRenderer {
         int kanCount = session.kanCount();
         for (int i = 0; i < dora.size(); i++) {
             DeadWallPlacement placement = deadWallPlacements.get(doraIndicatorDeadWallIndex(kanCount, i));
-            spawned.add(DisplayEntities.spawnTileDisplay(
-                session.plugin(),
-                placement.location(),
-                placement.yaw(),
-                dora.get(i),
-                DisplayEntities.TileRenderPose.FLAT_FACE_UP,
-                null,
-                true
-            ));
+            spawned.add(spawnPublicTile(session, placement.location(), placement.yaw(), dora.get(i), DisplayEntities.TileRenderPose.FLAT_FACE_UP));
         }
         return spawned;
     }
@@ -403,14 +389,12 @@ public final class TableRenderer {
                 cursor = add(cursor, smallGapOffset(wind));
             }
 
-            spawned.add(DisplayEntities.spawnTileDisplay(
-                session.plugin(),
+            spawned.add(spawnPublicTile(
+                session,
                 cursor.clone().add(0.0D, FLAT_TILE_Y, 0.0D),
                 DiscardLayout.discardYaw(wind, riichiTile),
                 discards.get(discardIndex),
-                DisplayEntities.TileRenderPose.FLAT_FACE_UP,
-                null,
-                true
+                DisplayEntities.TileRenderPose.FLAT_FACE_UP
             ));
         }
         return spawned;
@@ -451,14 +435,12 @@ public final class TableRenderer {
                     } else {
                         cursor = add(cursor, verticalTileOffset(wind));
                     }
-                    spawned.add(DisplayEntities.spawnTileDisplay(
-                        session.plugin(),
+                    spawned.add(spawnPublicTile(
+                        session,
                         cursor.clone().add(0.0D, FLAT_TILE_Y, 0.0D),
                         yaw,
                         meld.tiles().get(i),
-                        meld.faceDownAt(i) ? DisplayEntities.TileRenderPose.FLAT_FACE_DOWN : DisplayEntities.TileRenderPose.FLAT_FACE_UP,
-                        null,
-                        true
+                        meld.faceDownAt(i) ? DisplayEntities.TileRenderPose.FLAT_FACE_DOWN : DisplayEntities.TileRenderPose.FLAT_FACE_UP
                     ));
                     placedTileCount++;
                 }
@@ -480,14 +462,12 @@ public final class TableRenderer {
                 }
 
                 Location baseLocation = isClaimTile ? add(cursor, horizontalTileGravityOffset(wind)) : cursor;
-                spawned.add(DisplayEntities.spawnTileDisplay(
-                    session.plugin(),
+                spawned.add(spawnPublicTile(
+                    session,
                     baseLocation.clone().add(0.0D, FLAT_TILE_Y, 0.0D),
                     isClaimTile ? yaw + meld.claimYawOffset() : yaw,
                     meld.tiles().get(i),
-                    meld.faceDownAt(i) ? DisplayEntities.TileRenderPose.FLAT_FACE_DOWN : DisplayEntities.TileRenderPose.FLAT_FACE_UP,
-                    null,
-                    true
+                    meld.faceDownAt(i) ? DisplayEntities.TileRenderPose.FLAT_FACE_DOWN : DisplayEntities.TileRenderPose.FLAT_FACE_UP
                 ));
                 lastClaimBase = isClaimTile ? baseLocation.clone() : null;
                 lastTileWasHorizontal = isClaimTile;
@@ -495,14 +475,12 @@ public final class TableRenderer {
             }
 
             if (meld.hasAddedKanTile() && lastClaimBase != null) {
-                spawned.add(DisplayEntities.spawnTileDisplay(
-                    session.plugin(),
+                spawned.add(spawnPublicTile(
+                    session,
                     add(lastClaimBase, kakanOffset(wind)).add(0.0D, FLAT_TILE_Y, 0.0D),
                     yaw + meld.claimYawOffset(),
                     meld.addedKanTile(),
-                    DisplayEntities.TileRenderPose.FLAT_FACE_UP,
-                    null,
-                    true
+                    DisplayEntities.TileRenderPose.FLAT_FACE_UP
                 ));
                 lastClaimBase = null;
                 lastTileWasHorizontal = false;
@@ -522,6 +500,54 @@ public final class TableRenderer {
     private List<Entity> renderTableHitboxes(MahjongTableSession session, Location center) {
         Entity furnitureHitbox = session.plugin().craftEngine().placeTableHitbox(center.clone());
         return furnitureHitbox == null ? List.of() : List.of(furnitureHitbox);
+    }
+
+    private static Entity spawnTableVisual(MahjongTableSession session, Location tableCenter, double borderSpanX, double borderSpanZ) {
+        if (session.plugin().craftEngine() == null) {
+            return null;
+        }
+        Location anchor = tableCenter.clone().add(-borderSpanX / 2.0D, -1.0D, -borderSpanZ / 2.0D);
+        return session.plugin().craftEngine().placeFurniture(anchor, TABLE_VISUAL_FURNITURE_ID);
+    }
+
+    private static Entity spawnPublicTile(
+        MahjongTableSession session,
+        Location location,
+        float yaw,
+        MahjongTile tile,
+        DisplayEntities.TileRenderPose pose
+    ) {
+        Entity furniture = session.plugin().craftEngine() == null
+            ? null
+            : session.plugin().craftEngine().placeFurniture(withYaw(location, yaw), publicTileFurnitureId(tile, pose));
+        if (furniture != null) {
+            return furniture;
+        }
+        return DisplayEntities.spawnTileDisplay(
+            session.plugin(),
+            location,
+            yaw,
+            tile,
+            pose,
+            null,
+            true
+        );
+    }
+
+    private static String publicTileFurnitureId(MahjongTile tile, DisplayEntities.TileRenderPose pose) {
+        return "mahjongpaper:" + switch (pose) {
+            case STANDING -> "tile_standing_";
+            case STANDING_FACE_DOWN -> "tile_standing_face_down_";
+            case FLAT_FACE_UP -> "tile_flat_face_up_";
+            case FLAT_FACE_DOWN -> "tile_flat_face_down_";
+        } + tile.name().toLowerCase(Locale.ROOT);
+    }
+
+    private static Location withYaw(Location location, float yaw) {
+        Location rotated = location.clone();
+        rotated.setYaw(yaw);
+        rotated.setPitch(0.0F);
+        return rotated;
     }
 
     private static Location centeredCuboid(Location center, double width, double height, double depth) {
@@ -669,6 +695,12 @@ public final class TableRenderer {
     }
 
     private static Entity spawnStick(MahjongTableSession session, Location center, boolean longOnX, ScoringStick stick) {
+        Entity furniture = session.plugin().craftEngine() == null
+            ? null
+            : session.plugin().craftEngine().placeFurniture(center, stickFurnitureId(longOnX, stick));
+        if (furniture != null) {
+            return furniture;
+        }
         double width = longOnX ? STICK_WIDTH : STICK_DEPTH;
         double depth = longOnX ? STICK_DEPTH : STICK_WIDTH;
         return DisplayEntities.spawnBlockDisplay(
@@ -679,6 +711,17 @@ public final class TableRenderer {
             (float) STICK_HEIGHT,
             (float) depth
         );
+    }
+
+    private static String stickFurnitureId(boolean longOnX, ScoringStick stick) {
+        return STICK_FURNITURE_PREFIX
+            + (longOnX ? "x_" : "z_")
+            + switch (stick) {
+                case P100 -> "p100";
+                case P5000 -> "p5000";
+                case P10000 -> "p10000";
+                default -> "p1000";
+            };
     }
 
     private static Material stickMaterial(ScoringStick stick) {

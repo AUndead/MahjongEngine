@@ -131,7 +131,7 @@ public final class CraftEngineService {
         return entity;
     }
 
-    private Entity placeFurniture(Location location, String furnitureItemId) {
+    public Entity placeFurniture(Location location, String furnitureItemId) {
         if (!this.preferFurnitureHitbox || this.furnitureReflectionUnavailable) {
             return null;
         }
