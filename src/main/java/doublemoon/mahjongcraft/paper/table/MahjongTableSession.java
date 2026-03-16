@@ -472,7 +472,7 @@ public final class MahjongTableSession {
 
     private void startAsyncRenderPrecompute(RenderSnapshot snapshot) {
         this.renderPrecomputeRunning = true;
-        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> {
+        this.plugin.async().execute("render-precompute-" + this.id, () -> {
             RenderPrecomputeResult result = new RenderPrecomputeResult(
                 snapshot,
                 this.precomputeRegionFingerprints(snapshot),
