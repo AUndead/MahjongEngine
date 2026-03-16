@@ -208,6 +208,16 @@ public final class TableRenderer {
                 Component.text(session.displayName(playerId, session.publicLocale())),
                 Color.fromARGB(100, 18, 18, 18)
             ));
+            if (!session.isStarted()) {
+                spawned.add(DisplayEntities.spawnInteraction(
+                    session.plugin(),
+                    seatInteractionLocation(handBase),
+                    SEAT_INTERACTION_WIDTH,
+                    SEAT_INTERACTION_HEIGHT,
+                    DisplayClickAction.toggleReady(session.id(), wind),
+                    null
+                ));
+            }
         } else if (!session.isStarted()) {
             spawned.add(DisplayEntities.spawnInteraction(
                 session.plugin(),

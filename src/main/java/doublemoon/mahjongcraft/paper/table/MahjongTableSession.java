@@ -67,6 +67,8 @@ public final class MahjongTableSession {
     private final Map<UUID, BossBar> viewerHudBars = new HashMap<>();
     private final Map<UUID, String> viewerHudState = new HashMap<>();
     private final Map<UUID, Integer> selectedHandTileIndices = new HashMap<>();
+    private final Set<UUID> readyPlayers = new LinkedHashSet<>();
+    private final Set<UUID> leaveAfterRoundPlayers = new LinkedHashSet<>();
     private MahjongRule configuredRule;
     private RiichiRoundEngine engine;
     private doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile;
@@ -137,6 +139,8 @@ public final class MahjongTableSession {
         }
         this.spectators.remove(player.getUniqueId());
         this.seats.set(wind.index(), playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
+        this.readyPlayers.remove(playerId);
         return true;
     }
 
@@ -169,7 +173,9 @@ public final class MahjongTableSession {
         }
         this.seats.set(emptySeat.index(), botId);
         this.botNames.put(botId, "Bot-" + this.botNames.size());
+        this.readyPlayers.add(botId);
         this.render();
+        this.maybeStartRoundIfReady();
         return true;
     }
 
@@ -184,6 +190,8 @@ public final class MahjongTableSession {
                 this.botNames.remove(playerId);
                 this.feedbackState.remove(playerId);
                 this.selectedHandTileIndices.remove(playerId);
+                this.readyPlayers.remove(playerId);
+                this.leaveAfterRoundPlayers.remove(playerId);
                 this.render();
                 return true;
             }
@@ -199,6 +207,8 @@ public final class MahjongTableSession {
         this.feedbackState.remove(playerId);
         this.botNames.remove(playerId);
         this.selectedHandTileIndices.remove(playerId);
+        this.readyPlayers.remove(playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
         int seatIndex = this.seats.indexOf(playerId);
         if (seatIndex < 0) {
             return false;
@@ -262,9 +272,64 @@ public final class MahjongTableSession {
         return null;
     }
 
+    public boolean isReady(UUID playerId) {
+        return playerId != null && (this.isBot(playerId) || this.readyPlayers.contains(playerId));
+    }
+
+    public int readyCount() {
+        int ready = 0;
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.isReady(playerId)) {
+                ready++;
+            }
+        }
+        return ready;
+    }
+
+    public boolean isQueuedToLeave(UUID playerId) {
+        return playerId != null && this.leaveAfterRoundPlayers.contains(playerId);
+    }
+
+    public ReadyResult toggleReady(UUID playerId) {
+        if (playerId == null || !this.contains(playerId) || this.isBot(playerId) || this.isStarted()) {
+            return ReadyResult.BLOCKED;
+        }
+
+        boolean nowReady;
+        if (this.readyPlayers.contains(playerId)) {
+            this.readyPlayers.remove(playerId);
+            nowReady = false;
+        } else {
+            this.readyPlayers.add(playerId);
+            nowReady = true;
+        }
+
+        if (nowReady && this.maybeStartRoundIfReady()) {
+            return ReadyResult.STARTED;
+        }
+
+        this.render();
+        return nowReady ? ReadyResult.READY : ReadyResult.UNREADY;
+    }
+
+    public boolean queueLeaveAfterRound(UUID playerId) {
+        if (playerId == null || !this.contains(playerId) || !this.isStarted()) {
+            return false;
+        }
+        this.leaveAfterRoundPlayers.add(playerId);
+        return true;
+    }
+
     public void startRound() {
         if (this.size() != 4) {
             throw new IllegalStateException("A riichi table needs exactly 4 players");
+        }
+
+        for (SeatWind wind : SeatWind.values()) {
+            UUID playerId = this.playerAt(wind);
+            if (playerId == null || !this.isReady(playerId)) {
+                throw new IllegalStateException("All seated players must be ready");
+            }
         }
 
         this.cancelNextRoundCountdown();
@@ -533,6 +598,8 @@ public final class MahjongTableSession {
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
         this.lastResolutionSoundFingerprint = "";
+        this.readyPlayers.clear();
+        this.leaveAfterRoundPlayers.clear();
         this.spectators.clear();
         this.clearHud();
         this.engine = null;
@@ -550,7 +617,9 @@ public final class MahjongTableSession {
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
         this.lastResolutionSoundFingerprint = "";
+        this.leaveAfterRoundPlayers.clear();
         this.engine = null;
+        this.resetReadyStateForNextRound();
         this.render();
     }
 
@@ -652,7 +721,7 @@ public final class MahjongTableSession {
             this.plugin.messages().number(locale, "bots", this.botCount()),
             this.plugin.messages().number(locale, "spectators", this.spectatorCount()),
             this.plugin.messages().tag("rules", this.ruleSummary(locale))
-        );
+        ) + " | Ready " + this.readyCount() + "/" + this.size();
     }
 
     public String waitingDisplaySummary() {
@@ -666,7 +735,7 @@ public final class MahjongTableSession {
             this.plugin.messages().number(locale, "seats", this.size()),
             this.plugin.messages().number(locale, "bots", this.botCount()),
             this.plugin.messages().number(locale, "spectators", this.spectatorCount())
-        );
+        ) + " | Ready " + this.readyCount() + "/" + this.size();
     }
 
     public String ruleDisplaySummary() {
@@ -1035,13 +1104,10 @@ public final class MahjongTableSession {
         this.restoreDisplaysIfNeeded();
         this.updateViewerOverlayRegions();
         this.syncHud();
-        if (this.engine == null || this.engine.getStarted() || this.engine.getGameFinished() || this.nextRoundDeadlineMillis <= 0L) {
+        if (this.engine == null || this.engine.getStarted() || this.engine.getLastResolution() == null) {
             return;
         }
-        if (System.currentTimeMillis() >= this.nextRoundDeadlineMillis) {
-            this.startRound();
-            this.broadcastSound(Sound.BLOCK_BEACON_POWER_SELECT, 0.9F, 1.2F);
-        }
+        this.processDeferredLeaves();
     }
 
     private MahjongRule currentRule() {
@@ -1223,25 +1289,19 @@ public final class MahjongTableSession {
         if (settlementFingerprint.isBlank() || settlementFingerprint.equals(this.lastSettlementFingerprint)) {
             return;
         }
+        this.resetReadyStateForNextRound();
         this.openSettlementForViewers();
-        if (!this.engine.getGameFinished()) {
-            this.scheduleNextRoundCountdown();
-        } else {
-            this.cancelNextRoundCountdown();
-        }
+        this.cancelNextRoundCountdown();
+        this.promptPlayersToReady();
     }
 
     private void openSettlementForViewers() {
         for (Player player : this.viewers()) {
             SettlementUi.open(player, this);
             if (!this.engine.getGameFinished()) {
-                this.plugin.messages().send(
-                    player,
-                    "table.next_round_countdown",
-                    this.plugin.messages().number(this.plugin.messages().resolveLocale(player), "seconds", NEXT_ROUND_DELAY_MILLIS / 1000L)
-                );
+                player.sendMessage(Component.text("Round finished. Ready up to begin the next hand.", NamedTextColor.YELLOW));
             } else {
-                this.plugin.messages().send(player, "table.match_finished");
+                player.sendMessage(Component.text("Match finished. All players must ready again to start a new game.", NamedTextColor.GOLD));
             }
         }
     }
@@ -1334,13 +1394,16 @@ public final class MahjongTableSession {
     }
 
     private void appendNextRoundStateSummary(StringBuilder builder, Locale locale) {
-        if (this.nextRoundDeadlineMillis <= 0L || this.engine.getGameFinished()) {
+        if (this.engine == null || this.engine.getStarted() || this.engine.getGameFinished()) {
             return;
         }
         builder.append(" | ")
             .append(this.plugin.messages().plain(locale, "state.label.next_round"))
             .append(' ')
-            .append(this.plugin.messages().plain(locale, "state.next_round_in", this.plugin.messages().number(locale, "seconds", this.nextRoundSecondsRemaining())));
+            .append("Ready ")
+            .append(this.readyCount())
+            .append('/')
+            .append(this.size());
     }
 
     private void appendFinishedStateSummary(StringBuilder builder, Locale locale) {
@@ -1386,9 +1449,9 @@ public final class MahjongTableSession {
     private Component nextRoundViewerOverlay(Locale locale) {
         return this.plugin.messages().render(
             locale,
-            "overlay.next_round",
-            this.plugin.messages().tag("round", this.roundDisplay(locale)),
-            this.plugin.messages().number(locale, "seconds", this.nextRoundSecondsRemaining())
+            "overlay.waiting",
+            this.plugin.messages().tag("table_id", this.id),
+            this.plugin.messages().tag("summary", this.waitingDisplaySummary(locale))
         );
     }
 
@@ -1477,12 +1540,12 @@ public final class MahjongTableSession {
                 this.plugin.messages().tag("title", this.resolutionLabel(locale, this.engine.getLastResolution().getTitle()))
             );
         }
-        if (!this.engine.getStarted() && this.nextRoundDeadlineMillis > 0L) {
+        if (!this.engine.getStarted()) {
             return this.plugin.messages().render(
                 locale,
-                "hud.next_round",
-                this.plugin.messages().tag("round", this.roundDisplay(locale)),
-                this.plugin.messages().number(locale, "seconds", this.nextRoundSecondsRemaining())
+                "hud.waiting",
+                this.plugin.messages().tag("table_id", this.id),
+                this.plugin.messages().tag("summary", this.waitingDisplaySummary(locale))
             );
         }
         String role = this.isSpectator(viewerId)
@@ -1502,8 +1565,8 @@ public final class MahjongTableSession {
         if (this.engine == null) {
             return Math.min(1.0F, this.size() / 4.0F);
         }
-        if (!this.engine.getStarted() && this.nextRoundDeadlineMillis > 0L) {
-            return Math.max(0.0F, Math.min(1.0F, this.nextRoundSecondsRemaining() / (float) (NEXT_ROUND_DELAY_MILLIS / 1000L)));
+        if (!this.engine.getStarted()) {
+            return this.size() == 0 ? 0.0F : Math.max(0.0F, Math.min(1.0F, this.readyCount() / (float) this.size()));
         }
         if (this.engine.getWall().isEmpty()) {
             return 0.0F;
@@ -1518,7 +1581,7 @@ public final class MahjongTableSession {
         if (this.engine.getGameFinished()) {
             return BossBar.Color.PURPLE;
         }
-        if (!this.engine.getStarted() && this.nextRoundDeadlineMillis > 0L) {
+        if (!this.engine.getStarted()) {
             return BossBar.Color.YELLOW;
         }
         if (this.engine.availableReactions(viewerId.toString()) != null) {
@@ -1976,6 +2039,8 @@ public final class MahjongTableSession {
             .field(this.displayName(playerId))
             .field(this.points(playerId))
             .field(this.isRiichi(playerId))
+            .field(this.isReady(playerId))
+            .field(this.isQueuedToLeave(playerId))
             .toString();
     }
 
@@ -2136,13 +2201,17 @@ public final class MahjongTableSession {
                 this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale))
             );
         }
-        String riichi = this.isRiichi(playerId) ? this.plugin.messages().plain(locale, "overlay.status_riichi") : "";
+        String status = this.waitingSeatStatus(playerId);
+        if (this.isStarted() && this.isRiichi(playerId)) {
+            String riichi = this.plugin.messages().plain(locale, "overlay.status_riichi");
+            status = status.isBlank() ? riichi : status + " | " + riichi;
+        }
         return this.plugin.messages().plain(
             locale,
             "table.public.seat_status",
             this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale)),
             this.plugin.messages().number(locale, "points", this.points(playerId)),
-            this.plugin.messages().tag("status", riichi.isBlank() ? "" : " | " + riichi)
+            this.plugin.messages().tag("status", status.isBlank() ? "" : " | " + status)
         );
     }
 
@@ -2229,6 +2298,72 @@ public final class MahjongTableSession {
         return this.plugin.messages().contains(locale, key) ? this.plugin.messages().plain(locale, key) : title;
     }
 
+    private String waitingSeatStatus(UUID playerId) {
+        if (playerId == null || this.isStarted()) {
+            return "";
+        }
+        if (this.isQueuedToLeave(playerId)) {
+            return "Leaving";
+        }
+        return this.isReady(playerId) ? "Ready" : "Waiting";
+    }
+
+    private void resetReadyStateForNextRound() {
+        this.readyPlayers.clear();
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.isBot(playerId)) {
+                this.readyPlayers.add(playerId);
+            }
+        }
+    }
+
+    private void promptPlayersToReady() {
+        for (UUID playerId : this.seats) {
+            if (playerId == null || this.isBot(playerId) || this.isQueuedToLeave(playerId)) {
+                continue;
+            }
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null) {
+                continue;
+            }
+            player.sendMessage(Component.text("Click your seat label or use /mahjong start to ready up.", NamedTextColor.YELLOW));
+        }
+    }
+
+    private boolean maybeStartRoundIfReady() {
+        if (this.isStarted() || this.size() != 4) {
+            return false;
+        }
+        for (SeatWind wind : SeatWind.values()) {
+            UUID playerId = this.playerAt(wind);
+            if (playerId == null || !this.isReady(playerId)) {
+                return false;
+            }
+        }
+        this.startRound();
+        this.broadcastSound(Sound.BLOCK_BEACON_POWER_SELECT, 0.9F, 1.2F);
+        return true;
+    }
+
+    private void processDeferredLeaves() {
+        if (this.leaveAfterRoundPlayers.isEmpty() || this.isStarted()) {
+            return;
+        }
+        List<UUID> removed = new ArrayList<>();
+        for (UUID playerId : List.copyOf(this.leaveAfterRoundPlayers)) {
+            if (this.removePlayer(playerId)) {
+                removed.add(playerId);
+            }
+        }
+        if (removed.isEmpty()) {
+            return;
+        }
+        this.leaveAfterRoundPlayers.removeAll(removed);
+        if (this.plugin.tableManager() != null) {
+            this.plugin.tableManager().finalizeDeferredLeaves(this, removed);
+        }
+    }
+
     private static MahjongRule majsoulRule(MahjongRule.GameLength length) {
         return new MahjongRule(
             length,
@@ -2293,5 +2428,12 @@ public final class MahjongTableSession {
         public double gameScore() {
             return this.gameScore;
         }
+    }
+
+    public enum ReadyResult {
+        READY,
+        UNREADY,
+        STARTED,
+        BLOCKED
     }
 }

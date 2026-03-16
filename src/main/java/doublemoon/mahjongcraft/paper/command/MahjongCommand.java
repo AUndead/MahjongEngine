@@ -131,13 +131,17 @@ public final class MahjongCommand implements BasicCommand {
                     this.messages.send(player, "command.not_in_table");
                     return;
                 }
-                MahjongTableSession table = this.tableManager.leave(player.getUniqueId());
-                if (table != null) {
-                    this.messages.send(player, "command.left_table");
-                    return;
+                MahjongTableManager.LeaveResult result = this.tableManager.leave(player.getUniqueId());
+                switch (result.status()) {
+                    case LEFT -> this.messages.send(player, "command.left_table");
+                    case DEFERRED -> player.sendMessage(net.kyori.adventure.text.Component.text(
+                        "You will leave the table when the current hand ends.",
+                        net.kyori.adventure.text.format.NamedTextColor.YELLOW
+                    ));
+                    case UNSPECTATED -> this.messages.send(player, "command.unspectated");
+                    case NOT_IN_TABLE -> this.messages.send(player, "command.not_in_table");
+                    case BLOCKED -> this.messages.send(player, "command.leave_blocked_started");
                 }
-                MahjongTableSession spectatorTable = this.tableManager.unspectate(player.getUniqueId());
-                this.messages.send(player, spectatorTable == null ? "command.leave_blocked_started" : "command.unspectated");
             }
             case "list" -> {
                 if (this.tableManager.tables().isEmpty()) {
@@ -208,8 +212,7 @@ public final class MahjongCommand implements BasicCommand {
             }
             case "start" -> {
                 try {
-                    this.tableManager.start(player);
-                    this.messages.send(player, "command.round_started");
+                    this.tableManager.sendReadyResult(player, this.tableManager.start(player));
                 } catch (IllegalStateException ex) {
                     this.messages.send(player, "command.start_failed", this.messages.tag("reason", ex.getMessage()));
                 }

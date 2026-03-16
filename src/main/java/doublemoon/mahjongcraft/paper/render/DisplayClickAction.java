@@ -12,8 +12,13 @@ public record DisplayClickAction(ActionType actionType, String tableId, UUID own
         return new DisplayClickAction(ActionType.JOIN_SEAT, tableId, null, -1, seatWind);
     }
 
+    public static DisplayClickAction toggleReady(String tableId, SeatWind seatWind) {
+        return new DisplayClickAction(ActionType.TOGGLE_READY, tableId, null, -1, seatWind);
+    }
+
     public enum ActionType {
         HAND_TILE,
-        JOIN_SEAT
+        JOIN_SEAT,
+        TOGGLE_READY
     }
 }

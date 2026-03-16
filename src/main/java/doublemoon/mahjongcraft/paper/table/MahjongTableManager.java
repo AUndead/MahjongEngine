@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventPriority;
 import org.bukkit.entity.Player;
@@ -50,6 +52,7 @@ public final class MahjongTableManager implements Listener {
         session.render();
         this.persistTables();
         this.plugin.debug().log("table", "Created table " + id + " for " + owner.getName());
+        this.sendReadyPrompt(owner);
         return session;
     }
 
@@ -96,6 +99,7 @@ public final class MahjongTableManager implements Listener {
         this.playerTables.put(player.getUniqueId(), session.id());
         this.plugin.debug().log("table", player.getName() + " joined table " + session.id());
         session.render();
+        this.sendReadyPrompt(player);
         return session;
     }
 
@@ -124,6 +128,7 @@ public final class MahjongTableManager implements Listener {
         this.playerTables.put(playerId, session.id());
         this.plugin.debug().log("table", player.getName() + " joined table " + session.id() + " at " + wind.name());
         session.render();
+        this.sendReadyPrompt(player);
         return session;
     }
 
@@ -144,31 +149,26 @@ public final class MahjongTableManager implements Listener {
         return session;
     }
 
-    public MahjongTableSession leave(UUID playerId) {
+    public LeaveResult leave(UUID playerId) {
         MahjongTableSession session = this.tableFor(playerId);
         if (session == null) {
-            return this.unspectate(playerId);
+            MahjongTableSession spectatorSession = this.unspectate(playerId);
+            return spectatorSession == null
+                ? new LeaveResult(LeaveStatus.NOT_IN_TABLE, null)
+                : new LeaveResult(LeaveStatus.UNSPECTATED, spectatorSession);
+        }
+        if (session.isStarted()) {
+            return session.queueLeaveAfterRound(playerId)
+                ? new LeaveResult(LeaveStatus.DEFERRED, session)
+                : new LeaveResult(LeaveStatus.BLOCKED, session);
         }
         if (!session.removePlayer(playerId)) {
-            return null;
+            return new LeaveResult(LeaveStatus.BLOCKED, session);
         }
         this.playerTables.remove(playerId);
         this.plugin.debug().log("table", "Player " + playerId + " left table " + session.id());
-        if (session.isEmpty()) {
-            if (session.isPersistentRoom()) {
-                session.render();
-                this.plugin.debug().log("table", "Kept empty persistent table " + session.id());
-            } else {
-                session.spectators().forEach(this.spectatorTables::remove);
-                session.shutdown();
-                this.tables.remove(session.id());
-                this.plugin.debug().log("table", "Removed empty table " + session.id());
-            }
-        } else {
-            session.render();
-        }
-        this.persistTables();
-        return session;
+        this.handleSeatMembershipChanged(session, true);
+        return new LeaveResult(LeaveStatus.LEFT, session);
     }
 
     public MahjongTableSession unspectate(UUID playerId) {
@@ -224,13 +224,14 @@ public final class MahjongTableManager implements Listener {
         this.persistentTableStore.save(this.tables.values());
     }
 
-    public void start(Player player) {
+    public MahjongTableSession.ReadyResult start(Player player) {
         MahjongTableSession session = this.tableFor(player.getUniqueId());
         if (session == null) {
             throw new IllegalStateException("Player is not in a table");
         }
-        this.plugin.debug().log("table", player.getName() + " started table " + session.id());
-        session.startRound();
+        MahjongTableSession.ReadyResult result = session.toggleReady(player.getUniqueId());
+        this.plugin.debug().log("table", player.getName() + " toggled ready on table " + session.id() + " -> " + result.name());
+        return result;
     }
 
     public MahjongTableSession forceEndTable(String tableId) {
@@ -286,6 +287,14 @@ public final class MahjongTableManager implements Listener {
             this.plugin.messages().send(player, "command.joined_table", this.plugin.messages().tag("table_id", session.id()));
             return true;
         }
+        if (action.actionType() == ActionType.TOGGLE_READY) {
+            MahjongTableSession session = this.tables.get(action.tableId());
+            if (session == null || session.seatOf(player.getUniqueId()) != action.seatWind()) {
+                return false;
+            }
+            this.sendReadyResult(player, session.toggleReady(player.getUniqueId()));
+            return true;
+        }
         return false;
     }
 
@@ -301,10 +310,7 @@ public final class MahjongTableManager implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
-        MahjongTableSession session = this.leave(playerId);
-        if (session == null) {
-            this.unspectate(playerId);
-        }
+        this.leave(playerId);
     }
 
     @EventHandler
@@ -376,5 +382,62 @@ public final class MahjongTableManager implements Listener {
 
     private boolean isViewingAnyTable(UUID playerId) {
         return this.playerTables.containsKey(playerId) || this.spectatorTables.containsKey(playerId);
+    }
+
+    public void finalizeDeferredLeaves(MahjongTableSession session, Collection<UUID> playerIds) {
+        if (session == null || playerIds == null || playerIds.isEmpty()) {
+            return;
+        }
+        for (UUID playerId : playerIds) {
+            this.playerTables.remove(playerId);
+            this.plugin.debug().log("table", "Player " + playerId + " left table " + session.id() + " after round end");
+        }
+        this.handleSeatMembershipChanged(session, true);
+    }
+
+    private void handleSeatMembershipChanged(MahjongTableSession session, boolean renderAfter) {
+        if (session.isEmpty()) {
+            if (session.isPersistentRoom()) {
+                if (renderAfter) {
+                    session.render();
+                }
+                this.plugin.debug().log("table", "Kept empty persistent table " + session.id());
+            } else {
+                session.spectators().forEach(this.spectatorTables::remove);
+                session.shutdown();
+                this.tables.remove(session.id());
+                this.plugin.debug().log("table", "Removed empty table " + session.id());
+            }
+        } else if (renderAfter) {
+            session.render();
+        }
+        this.persistTables();
+    }
+
+    private void sendReadyPrompt(Player player) {
+        player.sendMessage(Component.text("Click your seat label or use /mahjong start to ready up.", NamedTextColor.YELLOW));
+    }
+
+    public void sendReadyResult(Player player, MahjongTableSession.ReadyResult result) {
+        if (player == null || result == null) {
+            return;
+        }
+        switch (result) {
+            case READY -> player.sendMessage(Component.text("Ready. Waiting for other players.", NamedTextColor.GREEN));
+            case UNREADY -> player.sendMessage(Component.text("Ready cancelled.", NamedTextColor.GRAY));
+            case STARTED -> this.plugin.messages().send(player, "command.round_started");
+            case BLOCKED -> player.sendMessage(Component.text("You cannot ready right now.", NamedTextColor.RED));
+        }
+    }
+
+    public record LeaveResult(LeaveStatus status, MahjongTableSession session) {
+    }
+
+    public enum LeaveStatus {
+        LEFT,
+        DEFERRED,
+        UNSPECTATED,
+        NOT_IN_TABLE,
+        BLOCKED
     }
 }
