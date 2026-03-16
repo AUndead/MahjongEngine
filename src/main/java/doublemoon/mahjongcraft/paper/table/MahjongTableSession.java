@@ -1248,7 +1248,7 @@ public final class MahjongTableSession {
     }
 
     public boolean clickHandTile(UUID playerId, int tileIndex) {
-        if (!this.contains(playerId) || tileIndex < 0 || tileIndex >= this.hand(playerId).size()) {
+        if (!this.canSelectHandTile(playerId, tileIndex)) {
             return false;
         }
         Integer selectedIndex = this.selectedHandTileIndices.get(playerId);
@@ -1269,7 +1269,21 @@ public final class MahjongTableSession {
     }
 
     private boolean isValidSelectedHandTile(UUID playerId, int tileIndex) {
-        return this.contains(playerId) && tileIndex >= 0 && tileIndex < this.hand(playerId).size();
+        return this.canSelectHandTile(playerId, tileIndex);
+    }
+
+    private boolean canSelectHandTile(UUID playerId, int tileIndex) {
+        if (!this.contains(playerId) || tileIndex < 0 || this.engine == null) {
+            return false;
+        }
+        RiichiPlayerState player = this.engine.seatPlayer(playerId.toString());
+        if (player == null || tileIndex >= player.getHands().size()) {
+            return false;
+        }
+        if (!this.engine.getStarted() || this.engine.getPendingReaction() != null) {
+            return false;
+        }
+        return this.engine.getCurrentPlayer().getUuid().equals(playerId.toString());
     }
 
     private doublemoon.mahjongcraft.paper.model.MahjongTile handTileAt(UUID playerId, int tileIndex) {
