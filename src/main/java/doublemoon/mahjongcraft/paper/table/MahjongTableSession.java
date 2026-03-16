@@ -1256,6 +1256,7 @@ public final class MahjongTableSession {
             return this.discard(playerId, tileIndex);
         }
         this.selectedHandTileIndices.put(playerId, tileIndex);
+        this.refreshSelectedHandTileView(playerId);
         this.render();
         return true;
     }
@@ -1284,6 +1285,24 @@ public final class MahjongTableSession {
             return false;
         }
         return this.engine.getCurrentPlayer().getUuid().equals(playerId.toString());
+    }
+
+    private void refreshSelectedHandTileView(UUID playerId) {
+        SeatWind wind = this.seatOf(playerId);
+        if (wind == null) {
+            return;
+        }
+        RenderSnapshot snapshot = this.captureRenderSnapshot(this.renderRequestVersion);
+        SeatRenderSnapshot seat = snapshot.seat(wind);
+        if (seat == null || seat.playerId() == null) {
+            return;
+        }
+        TableRenderLayout.LayoutPlan plan = TableRenderLayout.precompute(snapshot);
+        TableRenderLayout.SeatLayoutPlan seatPlan = plan.seat(wind);
+        if (seatPlan == null) {
+            return;
+        }
+        this.updatePrivateHandRegions(seat, seatPlan);
     }
 
     private doublemoon.mahjongcraft.paper.model.MahjongTile handTileAt(UUID playerId, int tileIndex) {
