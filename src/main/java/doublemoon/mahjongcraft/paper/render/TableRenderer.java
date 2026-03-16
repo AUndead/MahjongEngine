@@ -644,6 +644,32 @@ public final class TableRenderer {
         return spawned;
     }
 
+    public List<Entity> renderViewerOverlay(MahjongTableSession session, MahjongTableSession.ViewerOverlaySnapshot snapshot) {
+        Location center = displayCenter(session);
+        List<Entity> spawned = new ArrayList<>(snapshot.spectatorSeatOverlays().isEmpty() ? 1 : 1 + snapshot.spectatorSeatOverlays().size());
+        if (session.isStarted() || snapshot.spectator()) {
+            spawned.add(DisplayEntities.spawnLabel(
+                session.plugin(),
+                center.clone().add(0.0D, 0.9D + FLOATING_TEXT_Y_OFFSET, 0.0D),
+                snapshot.overlay(),
+                Color.fromARGB(84, 12, 12, 12),
+                List.of(snapshot.viewerId())
+            ));
+        }
+        if (snapshot.spectator()) {
+            for (MahjongTableSession.SpectatorSeatOverlaySnapshot seatOverlay : snapshot.spectatorSeatOverlays()) {
+                spawned.add(DisplayEntities.spawnLabel(
+                    session.plugin(),
+                    add(handDirectionBase(center, seatOverlay.wind()), offsetAcrossSeat(seatOverlay.wind(), 0.42D)).add(0.0D, 0.62D + FLOATING_TEXT_Y_OFFSET, 0.0D),
+                    seatOverlay.overlay(),
+                    Color.fromARGB(92, 14, 14, 18),
+                    List.of(snapshot.viewerId())
+                ));
+            }
+        }
+        return spawned;
+    }
+
     public List<Entity> renderDiscards(
         MahjongTableSession session,
         MahjongTableSession.SeatRenderSnapshot seat,

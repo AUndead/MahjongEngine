@@ -1128,7 +1128,10 @@ public final class MahjongTableSession {
     }
 
     public Component viewerOverlay(Player viewer) {
-        Locale locale = this.plugin.messages().resolveLocale(viewer);
+        return this.viewerOverlay(this.plugin.messages().resolveLocale(viewer), viewer);
+    }
+
+    private Component viewerOverlay(Locale locale, Player viewer) {
         if (this.engine == null) {
             return this.waitingViewerOverlay(locale);
         }
@@ -1142,7 +1145,10 @@ public final class MahjongTableSession {
     }
 
     public Component spectatorSeatOverlay(Player viewer, SeatWind wind) {
-        Locale locale = this.plugin.messages().resolveLocale(viewer);
+        return this.spectatorSeatOverlay(this.plugin.messages().resolveLocale(viewer), wind);
+    }
+
+    private Component spectatorSeatOverlay(Locale locale, SeatWind wind) {
         UUID playerId = this.playerAt(wind);
         if (playerId == null) {
             return this.plugin.messages().render(
@@ -1585,13 +1591,102 @@ public final class MahjongTableSession {
         return status.isBlank() ? riichi : status + " / " + riichi;
     }
 
+    private ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
+        Locale locale = this.plugin.messages().resolveLocale(viewer);
+        UUID viewerId = viewer.getUniqueId();
+        String regionKey = "viewer-overlay:" + viewerId;
+        boolean spectator = this.isSpectator(viewerId);
+        Component overlay = this.viewerOverlay(locale, viewer);
+        List<SpectatorSeatOverlaySnapshot> seatOverlays = spectator
+            ? this.captureSpectatorSeatOverlays(locale)
+            : List.of();
+        String fingerprint = this.viewerOverlayFingerprint(viewer, locale, viewerId, spectator, seatOverlays);
+        return new ViewerOverlaySnapshot(viewerId, regionKey, spectator, overlay, seatOverlays, fingerprint);
+    }
+
+    private List<SpectatorSeatOverlaySnapshot> captureSpectatorSeatOverlays(Locale locale) {
+        List<SpectatorSeatOverlaySnapshot> overlays = new ArrayList<>(SeatWind.values().length);
+        for (SeatWind wind : SeatWind.values()) {
+            UUID playerId = this.playerAt(wind);
+            String signature;
+            Component overlay;
+            if (playerId == null) {
+                signature = fingerprintBuilder(64)
+                    .field(wind.name())
+                    .field("empty")
+                    .toString();
+                overlay = this.plugin.messages().render(
+                    locale,
+                    "overlay.seat_empty",
+                    this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale))
+                );
+            } else {
+                String status = this.spectatorSeatStatus(locale, wind, playerId);
+                int points = this.points(playerId);
+                int handCount = this.hand(playerId).size();
+                int riverCount = this.discards(playerId).size();
+                int meldCount = this.fuuro(playerId).size();
+                String displayName = this.displayName(playerId, locale);
+                signature = fingerprintBuilder(160)
+                    .field(wind.name())
+                    .field(playerId)
+                    .field(displayName)
+                    .field(points)
+                    .field(handCount)
+                    .field(riverCount)
+                    .field(meldCount)
+                    .field(status)
+                    .toString();
+                overlay = this.plugin.messages().render(
+                    locale,
+                    "overlay.seat",
+                    this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale)),
+                    this.plugin.messages().tag("name", displayName),
+                    this.plugin.messages().number(locale, "points", points),
+                    this.plugin.messages().number(locale, "hand", handCount),
+                    this.plugin.messages().number(locale, "river", riverCount),
+                    this.plugin.messages().number(locale, "melds", meldCount),
+                    this.plugin.messages().tag("status", status)
+                );
+            }
+            overlays.add(new SpectatorSeatOverlaySnapshot(wind, overlay, signature));
+        }
+        return List.copyOf(overlays);
+    }
+
+    private String viewerOverlayFingerprint(
+        Player viewer,
+        Locale locale,
+        UUID viewerId,
+        boolean spectator,
+        List<SpectatorSeatOverlaySnapshot> seatOverlays
+    ) {
+        FingerprintBuilder builder = fingerprintBuilder(256)
+            .field(locale.toLanguageTag())
+            .field(viewerId)
+            .field(spectator)
+            .field(this.nextRoundSecondsRemaining())
+            .field(this.engine == null ? null : this.engine.getLastResolution())
+            .field(this.waitingDisplaySummary())
+            .field(this.ruleDisplaySummary());
+        if (this.engine == null) {
+            return builder.field("no-engine").toString();
+        }
+        builder = this.appendActiveRoundFingerprint(builder)
+            .field(this.engine.availableReactions(viewerId.toString()));
+        for (SpectatorSeatOverlaySnapshot seatOverlay : seatOverlays) {
+            builder.field(seatOverlay.signature());
+        }
+        return builder.toString();
+    }
+
     private void updateViewerOverlayRegions() {
         List<Player> viewers = this.viewers();
         Set<String> activeKeys = new LinkedHashSet<>();
         for (Player viewer : viewers) {
-            String regionKey = "viewer-overlay:" + viewer.getUniqueId();
-            activeKeys.add(regionKey);
-            this.updateRegion(regionKey, this.viewerOverlayFingerprint(viewer), () -> this.renderer.renderViewerOverlay(this, viewer));
+            ViewerOverlaySnapshot snapshot = this.captureViewerOverlaySnapshot(viewer);
+            activeKeys.add(snapshot.regionKey());
+            this.updateRegion(snapshot.regionKey(), snapshot.fingerprint(), () -> this.renderer.renderViewerOverlay(this, snapshot));
         }
         for (String regionKey : List.copyOf(this.regionDisplays.keySet())) {
             if (regionKey.startsWith("viewer-overlay:") && !activeKeys.contains(regionKey)) {
@@ -1728,25 +1823,6 @@ public final class MahjongTableSession {
                 .toString();
         }
         return this.appendActiveRoundFingerprint(builder).toString();
-    }
-
-    private String viewerOverlayFingerprint(Player viewer) {
-        Locale locale = this.plugin.messages().resolveLocale(viewer);
-        FingerprintBuilder builder = fingerprintBuilder(224)
-            .field(locale.toLanguageTag())
-            .field(viewer.getUniqueId())
-            .field(this.isSpectator(viewer.getUniqueId()))
-            .field(this.nextRoundSecondsRemaining())
-            .field(this.engine == null ? null : this.engine.getLastResolution())
-            .field(this.waitingDisplaySummary())
-            .field(this.ruleDisplaySummary());
-        if (this.engine == null) {
-            return builder.field("no-engine").toString();
-        }
-        return this.appendActiveRoundFingerprint(builder)
-            .field(this.engine.availableReactions(viewer.getUniqueId().toString()))
-            .field(this.spectatorSeatFingerprint())
-            .toString();
     }
 
     private void hideHud(UUID viewerId) {
@@ -1914,25 +1990,6 @@ public final class MahjongTableSession {
                 target.append(spectatorId).append(';');
             }
         }
-    }
-
-    private String spectatorSeatFingerprint() {
-        FingerprintBuilder builder = fingerprintBuilder(256);
-        for (SeatWind wind : SeatWind.values()) {
-            UUID playerId = this.playerAt(wind);
-            builder.field(wind.name()).field(Objects.toString(playerId, "empty"));
-            if (playerId != null) {
-                builder.field(this.displayName(playerId))
-                    .field(this.points(playerId))
-                    .field(this.hand(playerId).size())
-                    .field(this.discards(playerId).size())
-                    .field(this.fuuro(playerId).size())
-                    .field(this.isRiichi(playerId))
-                    .field(this.currentSeat() == wind);
-            }
-            builder.entrySeparator();
-        }
-        return builder.toString();
     }
 
     private String riichiFingerprint() {
@@ -2486,6 +2543,23 @@ public final class MahjongTableSession {
         List<MeldView> melds,
         List<ScoringStick> scoringSticks,
         List<ScoringStick> cornerSticks
+    ) {
+    }
+
+    public record ViewerOverlaySnapshot(
+        UUID viewerId,
+        String regionKey,
+        boolean spectator,
+        Component overlay,
+        List<SpectatorSeatOverlaySnapshot> spectatorSeatOverlays,
+        String fingerprint
+    ) {
+    }
+
+    public record SpectatorSeatOverlaySnapshot(
+        SeatWind wind,
+        Component overlay,
+        String signature
     ) {
     }
 
