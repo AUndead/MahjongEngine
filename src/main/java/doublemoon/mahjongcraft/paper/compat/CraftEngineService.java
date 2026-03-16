@@ -85,7 +85,7 @@ public final class CraftEngineService {
         }
 
         if (this.exportBundleOnEnable) {
-            this.exportBundle(craftEngine);
+            Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> this.exportBundle(craftEngine));
         }
     }
 

@@ -311,7 +311,7 @@ public final class MahjongTableManager implements Listener {
 
     public void shutdown() {
         this.tableTickTask.cancel();
-        this.persistTables();
+        this.persistentTableStore.flush(this.tables.values());
         this.tables.values().forEach(MahjongTableSession::shutdown);
         this.tables.clear();
         this.playerTables.clear();

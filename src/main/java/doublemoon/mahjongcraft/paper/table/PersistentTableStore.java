@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -17,6 +19,9 @@ final class PersistentTableStore {
     private final MahjongPaperPlugin plugin;
     private final boolean enabled;
     private final File file;
+    private final AtomicReference<List<TableSnapshot>> pendingSnapshot = new AtomicReference<>();
+    private final AtomicBoolean asyncSaveScheduled = new AtomicBoolean();
+    private final Object saveLock = new Object();
 
     PersistentTableStore(MahjongPaperPlugin plugin) {
         this.plugin = plugin;
@@ -70,26 +75,81 @@ final class PersistentTableStore {
         if (!this.enabled) {
             return;
         }
-        YamlConfiguration yaml = new YamlConfiguration();
-        ConfigurationSection tables = yaml.createSection("tables");
+        this.pendingSnapshot.set(this.snapshotTables(sessions));
+        this.scheduleAsyncSave();
+    }
+
+    void flush(Collection<MahjongTableSession> sessions) {
+        if (!this.enabled) {
+            return;
+        }
+        List<TableSnapshot> snapshot = this.snapshotTables(sessions);
+        this.pendingSnapshot.set(null);
+        this.writeSnapshot(snapshot);
+    }
+
+    private void scheduleAsyncSave() {
+        if (!this.asyncSaveScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, this::drainPendingSaves);
+    }
+
+    private void drainPendingSaves() {
+        try {
+            while (true) {
+                List<TableSnapshot> snapshot = this.pendingSnapshot.getAndSet(null);
+                if (snapshot == null) {
+                    return;
+                }
+                this.writeSnapshot(snapshot);
+            }
+        } finally {
+            this.asyncSaveScheduled.set(false);
+            if (this.pendingSnapshot.get() != null) {
+                this.scheduleAsyncSave();
+            }
+        }
+    }
+
+    private List<TableSnapshot> snapshotTables(Collection<MahjongTableSession> sessions) {
+        List<TableSnapshot> snapshots = new ArrayList<>();
         for (MahjongTableSession session : sessions) {
             if (!session.isPersistentRoom()) {
                 continue;
             }
-            ConfigurationSection table = tables.createSection(session.id());
             Location center = session.center();
-            table.set("id", session.id());
-            table.set("world", center.getWorld() == null ? null : center.getWorld().getName());
-            table.set("x", center.getX());
-            table.set("y", center.getY());
-            table.set("z", center.getZ());
-            this.saveRule(table.createSection("rule"), session.configuredRuleSnapshot());
+            snapshots.add(new TableSnapshot(
+                session.id(),
+                center.getWorld() == null ? null : center.getWorld().getName(),
+                center.getX(),
+                center.getY(),
+                center.getZ(),
+                session.configuredRuleSnapshot()
+            ));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    private void writeSnapshot(List<TableSnapshot> snapshots) {
+        YamlConfiguration yaml = new YamlConfiguration();
+        ConfigurationSection tables = yaml.createSection("tables");
+        for (TableSnapshot snapshot : snapshots) {
+            ConfigurationSection table = tables.createSection(snapshot.id());
+            table.set("id", snapshot.id());
+            table.set("world", snapshot.worldName());
+            table.set("x", snapshot.x());
+            table.set("y", snapshot.y());
+            table.set("z", snapshot.z());
+            this.saveRule(table.createSection("rule"), snapshot.rule());
         }
         this.file.getParentFile().mkdirs();
-        try {
-            yaml.save(this.file);
-        } catch (IOException ex) {
-            this.plugin.getLogger().warning("Failed to save persistent tables: " + ex.getMessage());
+        synchronized (this.saveLock) {
+            try {
+                yaml.save(this.file);
+            } catch (IOException ex) {
+                this.plugin.getLogger().warning("Failed to save persistent tables: " + ex.getMessage());
+            }
         }
     }
 
@@ -123,5 +183,15 @@ final class PersistentTableStore {
     }
 
     record LoadedTable(String id, Location center, MahjongRule rule) {
+    }
+
+    private record TableSnapshot(
+        String id,
+        String worldName,
+        double x,
+        double y,
+        double z,
+        MahjongRule rule
+    ) {
     }
 }
