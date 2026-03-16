@@ -25,6 +25,7 @@ public final class TableRenderer {
     private static final double STICK_WIDTH = 0.4D;
     private static final double STICK_HEIGHT = 0.0125D;
     private static final double STICK_DEPTH = 0.0625D;
+    private static final double STICK_Y_OFFSET = 0.5D;
     private static final int STICKS_PER_STACK = 5;
     private static final double TABLE_BOTTOM_SIZE = 14.0D * ONE_SIXTEENTH;
     private static final double TABLE_BOTTOM_HEIGHT = 2.0D * ONE_SIXTEENTH;
@@ -33,6 +34,7 @@ public final class TableRenderer {
     private static final double TABLE_TOP_SIZE = 46.0D * ONE_SIXTEENTH;
     private static final double TABLE_TOP_THICKNESS = 2.0D * ONE_SIXTEENTH;
     private static final double TABLE_BORDER_THICKNESS = ONE_SIXTEENTH;
+    private static final double TABLE_BORDER_OUTWARD_OFFSET = ONE_SIXTEENTH;
     private static final double TABLE_BORDER_HEIGHT = 3.0D * ONE_SIXTEENTH;
     private static final double DISPLAY_CENTER_Y_OFFSET = 0.52D;
     private static final double TABLE_VISUAL_Y_OFFSET = 0.5D;
@@ -65,8 +67,8 @@ public final class TableRenderer {
         double topDepth = bounds.depth();
         double borderSpanX = topWidth + TABLE_BORDER_THICKNESS;
         double borderSpanZ = topDepth + TABLE_BORDER_THICKNESS;
-        double borderCenterOffsetX = topWidth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
-        double borderCenterOffsetZ = topDepth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
+        double borderCenterOffsetX = topWidth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D + TABLE_BORDER_OUTWARD_OFFSET;
+        double borderCenterOffsetZ = topDepth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D + TABLE_BORDER_OUTWARD_OFFSET;
         Entity tableVisual = spawnTableVisual(session, tableCenter);
         if (tableVisual != null) {
             spawned.add(tableVisual);
@@ -141,8 +143,8 @@ public final class TableRenderer {
         double topDepth = plan.borderSpanZ() - TABLE_BORDER_THICKNESS;
         double borderSpanX = plan.borderSpanX();
         double borderSpanZ = plan.borderSpanZ();
-        double borderCenterOffsetX = topWidth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
-        double borderCenterOffsetZ = topDepth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D;
+        double borderCenterOffsetX = topWidth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D + TABLE_BORDER_OUTWARD_OFFSET;
+        double borderCenterOffsetZ = topDepth / 2.0D + TABLE_BORDER_THICKNESS / 2.0D + TABLE_BORDER_OUTWARD_OFFSET;
         Entity tableVisual = spawnTableVisual(session, tableCenter);
         if (tableVisual != null) {
             spawned.add(tableVisual);
@@ -214,8 +216,8 @@ public final class TableRenderer {
         Location center = displayCenter(session);
         TableBounds bounds = tableBoundsFromTiles(center);
         Location tableCenter = center.clone().set(bounds.centerX(), center.getY(), bounds.centerZ());
-        double borderSpanX = bounds.width() + TABLE_BORDER_THICKNESS;
-        double borderSpanZ = bounds.depth() + TABLE_BORDER_THICKNESS;
+        double borderSpanX = bounds.width() + TABLE_BORDER_THICKNESS + TABLE_BORDER_OUTWARD_OFFSET * 2.0D;
+        double borderSpanZ = bounds.depth() + TABLE_BORDER_THICKNESS + TABLE_BORDER_OUTWARD_OFFSET * 2.0D;
         return new TableDiagnostics(
             center,
             tableCenter,
@@ -1010,10 +1012,10 @@ public final class TableRenderer {
         double halfWidthOfSixTiles = TILE_WIDTH * DISCARDS_PER_ROW / 2.0D;
         double paddingFromCenter = halfWidthOfSixTiles - STICK_DEPTH / 2.0D;
         return switch (wind) {
-            case EAST -> center.clone().add(paddingFromCenter, 0.0D, 0.0D);
-            case SOUTH -> center.clone().add(0.0D, 0.0D, paddingFromCenter);
-            case WEST -> center.clone().add(-paddingFromCenter, 0.0D, 0.0D);
-            case NORTH -> center.clone().add(0.0D, 0.0D, -paddingFromCenter);
+            case EAST -> center.clone().add(paddingFromCenter, STICK_Y_OFFSET, 0.0D);
+            case SOUTH -> center.clone().add(0.0D, STICK_Y_OFFSET, paddingFromCenter);
+            case WEST -> center.clone().add(-paddingFromCenter, STICK_Y_OFFSET, 0.0D);
+            case NORTH -> center.clone().add(0.0D, STICK_Y_OFFSET, -paddingFromCenter);
         };
     }
 
@@ -1032,7 +1034,7 @@ public final class TableRenderer {
             case WEST -> center.clone().add(-HALF_TABLE_LENGTH_NO_BORDER + halfWidthOfStick, 0.0D, HALF_TABLE_LENGTH_NO_BORDER - halfDepthOfStick);
             case NORTH -> center.clone().add(-HALF_TABLE_LENGTH_NO_BORDER + halfDepthOfStick, 0.0D, -HALF_TABLE_LENGTH_NO_BORDER + halfWidthOfStick);
         };
-        return add(start, multiply(cornerStickOffset(wind), stickIndex)).add(0.0D, stackIndex * (STICK_HEIGHT + TILE_PADDING), 0.0D);
+        return add(start, multiply(cornerStickOffset(wind), stickIndex)).add(0.0D, STICK_Y_OFFSET + stackIndex * (STICK_HEIGHT + TILE_PADDING), 0.0D);
     }
 
     private static boolean cornerStickLongOnX(SeatWind wind) {

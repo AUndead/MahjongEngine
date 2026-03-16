@@ -18,6 +18,7 @@ public final class TableRenderLayout {
     private static final double STICK_WIDTH = 0.4D;
     private static final double STICK_HEIGHT = 0.0125D;
     private static final double STICK_DEPTH = 0.0625D;
+    private static final double STICK_Y_OFFSET = 0.5D;
     private static final int STICKS_PER_STACK = 5;
     private static final double TABLE_BORDER_THICKNESS = ONE_SIXTEENTH;
     private static final double DISPLAY_CENTER_Y_OFFSET = 0.52D;
@@ -463,10 +464,10 @@ public final class TableRenderLayout {
         double halfWidthOfSixTiles = TILE_WIDTH * DISCARDS_PER_ROW / 2.0D;
         double paddingFromCenter = halfWidthOfSixTiles - STICK_DEPTH / 2.0D;
         return switch (wind) {
-            case EAST -> center.add(paddingFromCenter, 0.0D, 0.0D);
-            case SOUTH -> center.add(0.0D, 0.0D, paddingFromCenter);
-            case WEST -> center.add(-paddingFromCenter, 0.0D, 0.0D);
-            case NORTH -> center.add(0.0D, 0.0D, -paddingFromCenter);
+            case EAST -> center.add(paddingFromCenter, STICK_Y_OFFSET, 0.0D);
+            case SOUTH -> center.add(0.0D, STICK_Y_OFFSET, paddingFromCenter);
+            case WEST -> center.add(-paddingFromCenter, STICK_Y_OFFSET, 0.0D);
+            case NORTH -> center.add(0.0D, STICK_Y_OFFSET, -paddingFromCenter);
         };
     }
 
@@ -485,7 +486,7 @@ public final class TableRenderLayout {
             case WEST -> center.add(-HALF_TABLE_LENGTH_NO_BORDER + halfWidthOfStick, 0.0D, HALF_TABLE_LENGTH_NO_BORDER - halfDepthOfStick);
             case NORTH -> center.add(-HALF_TABLE_LENGTH_NO_BORDER + halfDepthOfStick, 0.0D, -HALF_TABLE_LENGTH_NO_BORDER + halfWidthOfStick);
         };
-        return add(start, multiply(cornerStickOffset(wind), stickIndex)).add(0.0D, stackIndex * (STICK_HEIGHT + TILE_PADDING), 0.0D);
+        return add(start, multiply(cornerStickOffset(wind), stickIndex)).add(0.0D, STICK_Y_OFFSET + stackIndex * (STICK_HEIGHT + TILE_PADDING), 0.0D);
     }
 
     private static boolean cornerStickLongOnX(SeatWind wind) {
