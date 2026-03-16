@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
@@ -36,6 +37,7 @@ public final class LocalizedMessages {
     private final Map<MessageCacheKey, String> templates = new ConcurrentHashMap<>();
     private final Map<MessageCacheKey, Component> staticComponents = new ConcurrentHashMap<>();
     private final Map<MessageCacheKey, String> staticPlainTexts = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Locale, ThreadLocal<NumberFormat>> integerFormats = new ConcurrentHashMap<>();
 
     public Component render(Locale locale, String key, TagResolver... placeholders) {
         if (placeholders.length == 0) {
@@ -66,7 +68,12 @@ public final class LocalizedMessages {
     }
 
     public TagResolver number(Locale locale, String key, Number value) {
-        return Placeholder.unparsed(key, NumberFormat.getIntegerInstance(this.resolveLocales(locale).get(0)).format(value));
+        Locale formatLocale = this.resolveLocales(locale).get(0);
+        NumberFormat format = this.integerFormats.computeIfAbsent(
+            formatLocale,
+            resolvedLocale -> ThreadLocal.withInitial(() -> NumberFormat.getIntegerInstance(resolvedLocale))
+        ).get();
+        return Placeholder.unparsed(key, format.format(value));
     }
 
     public Locale normalizeLocale(String rawLocale) {

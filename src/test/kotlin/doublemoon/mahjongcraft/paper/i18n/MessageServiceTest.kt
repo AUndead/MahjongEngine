@@ -83,4 +83,16 @@ class MessageServiceTest {
         assertContains(first, "A")
         assertContains(second, "B")
     }
+
+    @Test
+    fun `number formats integers with locale aware grouping`() {
+        val english = messages.number(Locale.ENGLISH, "value", 25000)
+        val chinese = messages.number(Locale.forLanguageTag("zh-CN"), "value", 25000)
+
+        val englishRendered = messages.plain(Locale.ENGLISH, "ui.score.total", english)
+        val chineseRendered = messages.plain(Locale.forLanguageTag("zh-CN"), "ui.score.total", chinese)
+
+        assertContains(englishRendered, "25,000")
+        assertContains(chineseRendered, "25,000")
+    }
 }
