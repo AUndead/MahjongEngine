@@ -1704,44 +1704,6 @@ public final class MahjongTableSession {
         this.hideOfflineHud(onlineViewerIds);
     }
 
-    private Component hudTitle(Locale locale, UUID viewerId) {
-        if (this.engine == null) {
-            return this.plugin.messages().render(
-                locale,
-                "hud.waiting",
-                this.plugin.messages().tag("table_id", this.id),
-                this.plugin.messages().tag("summary", this.waitingDisplaySummary(locale))
-            );
-        }
-        if (this.engine.getGameFinished() && this.engine.getLastResolution() != null) {
-            return this.plugin.messages().render(
-                locale,
-                "hud.finished",
-                this.plugin.messages().tag("round", this.roundDisplay(locale)),
-                this.plugin.messages().tag("title", this.resolutionLabel(locale, this.engine.getLastResolution().getTitle()))
-            );
-        }
-        if (!this.engine.getStarted()) {
-            return this.plugin.messages().render(
-                locale,
-                "hud.waiting",
-                this.plugin.messages().tag("table_id", this.id),
-                this.plugin.messages().tag("summary", this.waitingDisplaySummary(locale))
-            );
-        }
-        String role = this.isSpectator(viewerId)
-            ? this.plugin.messages().plain(locale, "hud.role_spectator")
-            : this.plugin.messages().plain(locale, "hud.role_player");
-        return this.plugin.messages().render(
-            locale,
-            "hud.round",
-            this.plugin.messages().tag("round", this.roundDisplay(locale)),
-            this.plugin.messages().tag("turn", this.engine.getCurrentPlayer().getDisplayName()),
-            this.plugin.messages().number(locale, "wall", this.engine.getWall().size()),
-            this.plugin.messages().tag("role", role)
-        );
-    }
-
     private float hudProgress() {
         if (this.engine == null) {
             return Math.min(1.0F, this.size() / 4.0F);
@@ -1778,18 +1740,18 @@ public final class MahjongTableSession {
         UUID viewerId = viewer.getUniqueId();
         onlineViewerIds.add(viewerId);
         Locale locale = this.plugin.messages().resolveLocale(viewer);
-        String state = this.hudStateSignature(locale, viewerId);
+        ViewerHudSnapshot snapshot = this.captureViewerHudSnapshot(locale, viewerId);
         BossBar bar = this.viewerHudBars.get(viewerId);
         if (bar == null) {
             bar = this.createHudBar(viewerId, viewer);
         }
-        if (Objects.equals(this.viewerHudState.get(viewerId), state)) {
+        if (Objects.equals(this.viewerHudState.get(viewerId), snapshot.stateSignature())) {
             return;
         }
-        bar.name(this.hudTitle(locale, viewerId));
-        bar.progress(this.hudProgress());
-        bar.color(this.hudColor(viewerId));
-        this.viewerHudState.put(viewerId, state);
+        bar.name(snapshot.title());
+        bar.progress(snapshot.progress());
+        bar.color(snapshot.color());
+        this.viewerHudState.put(viewerId, snapshot.stateSignature());
     }
 
     private BossBar createHudBar(UUID viewerId, Player viewer) {
@@ -1807,22 +1769,115 @@ public final class MahjongTableSession {
         }
     }
 
-    private String hudStateSignature(Locale locale, UUID viewerId) {
-        FingerprintBuilder builder = fingerprintBuilder(160)
-            .field(locale.toLanguageTag())
-            .field(this.hudProgress())
-            .field(this.hudColor(viewerId))
-            .field(this.nextRoundSecondsRemaining())
-            .field(this.isSpectator(viewerId))
-            .field(this.isStarted())
-            .field(this.engine == null ? null : this.engine.getLastResolution());
+    private ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
+        float progress = this.hudProgress();
+        BossBar.Color color = this.hudColor(viewerId);
+        boolean spectator = this.isSpectator(viewerId);
+        long nextRoundSeconds = this.nextRoundSecondsRemaining();
+        Object lastResolution = this.engine == null ? null : this.engine.getLastResolution();
+        Component title;
+        String stateSignature;
+
         if (this.engine == null) {
-            return builder
-                .field(this.waitingDisplaySummary())
-                .field(this.ruleDisplaySummary())
+            String waitingSummary = this.waitingDisplaySummary(locale);
+            String ruleSummary = this.ruleDisplaySummary(locale);
+            title = this.plugin.messages().render(
+                locale,
+                "hud.waiting",
+                this.plugin.messages().tag("table_id", this.id),
+                this.plugin.messages().tag("summary", waitingSummary)
+            );
+            stateSignature = fingerprintBuilder(192)
+                .field(locale.toLanguageTag())
+                .field(progress)
+                .field(color)
+                .field(nextRoundSeconds)
+                .field(spectator)
+                .field(false)
+                .field(lastResolution)
+                .field(waitingSummary)
+                .field(ruleSummary)
                 .toString();
+            return new ViewerHudSnapshot(title, progress, color, stateSignature);
         }
-        return this.appendActiveRoundFingerprint(builder).toString();
+
+        if (this.engine.getGameFinished() && this.engine.getLastResolution() != null) {
+            String round = this.roundDisplay(locale);
+            String titleText = this.resolutionLabel(locale, this.engine.getLastResolution().getTitle());
+            title = this.plugin.messages().render(
+                locale,
+                "hud.finished",
+                this.plugin.messages().tag("round", round),
+                this.plugin.messages().tag("title", titleText)
+            );
+            stateSignature = fingerprintBuilder(192)
+                .field(locale.toLanguageTag())
+                .field(progress)
+                .field(color)
+                .field(nextRoundSeconds)
+                .field(spectator)
+                .field(this.isStarted())
+                .field(lastResolution)
+                .field(round)
+                .field(titleText)
+                .toString();
+            return new ViewerHudSnapshot(title, progress, color, stateSignature);
+        }
+
+        if (!this.engine.getStarted()) {
+            String waitingSummary = this.waitingDisplaySummary(locale);
+            String ruleSummary = this.ruleDisplaySummary(locale);
+            title = this.plugin.messages().render(
+                locale,
+                "hud.waiting",
+                this.plugin.messages().tag("table_id", this.id),
+                this.plugin.messages().tag("summary", waitingSummary)
+            );
+            stateSignature = fingerprintBuilder(192)
+                .field(locale.toLanguageTag())
+                .field(progress)
+                .field(color)
+                .field(nextRoundSeconds)
+                .field(spectator)
+                .field(false)
+                .field(lastResolution)
+                .field(waitingSummary)
+                .field(ruleSummary)
+                .toString();
+            return new ViewerHudSnapshot(title, progress, color, stateSignature);
+        }
+
+        String round = this.roundDisplay(locale);
+        String turn = this.engine.getCurrentPlayer().getDisplayName();
+        int wall = this.engine.getWall().size();
+        String role = spectator
+            ? this.plugin.messages().plain(locale, "hud.role_spectator")
+            : this.plugin.messages().plain(locale, "hud.role_player");
+        title = this.plugin.messages().render(
+            locale,
+            "hud.round",
+            this.plugin.messages().tag("round", round),
+            this.plugin.messages().tag("turn", turn),
+            this.plugin.messages().number(locale, "wall", wall),
+            this.plugin.messages().tag("role", role)
+        );
+        stateSignature = fingerprintBuilder(192)
+            .field(locale.toLanguageTag())
+            .field(progress)
+            .field(color)
+            .field(nextRoundSeconds)
+            .field(spectator)
+            .field(true)
+            .field(lastResolution)
+            .field(round)
+            .field(turn)
+            .field(wall)
+            .field(role)
+            .field(this.lastPublicDiscardPlayerId)
+            .field(this.lastPublicDiscardTile)
+            .field(this.engine.availableReactions(viewerId.toString()))
+            .toString();
+        return new ViewerHudSnapshot(title, progress, color, stateSignature);
     }
 
     private void hideHud(UUID viewerId) {
@@ -2560,6 +2615,14 @@ public final class MahjongTableSession {
         SeatWind wind,
         Component overlay,
         String signature
+    ) {
+    }
+
+    private record ViewerHudSnapshot(
+        Component title,
+        float progress,
+        BossBar.Color color,
+        String stateSignature
     ) {
     }
 
