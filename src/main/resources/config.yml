@@ -1,25 +1,74 @@
+# MahjongPaper configuration
+#
+# The plugin snapshots this file during startup. Restart the server or plugin
+# process after editing it so database, CraftEngine, and table persistence
+# settings are all reloaded together.
+#
+# New grouped keys are preferred, but the code still accepts the older
+# flat keys for backward compatibility.
+
 database:
+  # Set to false to disable round history persistence entirely.
   enabled: true
+
+  # If true, the plugin disables itself when the database cannot initialize.
   failOnError: false
-  type: h2
-  host: 127.0.0.1
-  port: 3306
-  name: mahjongpaper
-  username: root
-  password: change_me
-  parameters: useUnicode=true&characterEncoding=utf8&useSsl=false
+
+  connection:
+    # Supported values: h2, mariadb
+    type: h2
+
+    # Used only for MariaDB.
+    host: 127.0.0.1
+    port: 3306
+    name: mahjongpaper
+
+    # Extra JDBC query parameters for MariaDB.
+    parameters: useUnicode=true&characterEncoding=utf8&useSsl=false
+
+  credentials:
+    # Used only for MariaDB.
+    username: root
+    password: change_me
+
   h2:
     # Relative paths are resolved against the plugin data folder.
     path: data/mahjongpaper
     username: sa
     password: ""
     parameters: MODE=MariaDB;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+
   pool:
-    maximumPoolSize: 10
-    minimumIdle: 2
+    maxSize: 10
+    minIdle: 2
     connectionTimeoutMillis: 10000
+
+tables:
+  persistence:
+    # Persistent tables are restored from this file on startup.
+    enabled: true
+    file: tables.yml
+
+integrations:
+  craftengine:
+    # Export the bundled MahjongPaper CraftEngine pack on startup.
+    exportBundleOnEnable: true
+
+    bundle:
+      folder: mahjongpaper
+
+    items:
+      # Prefer CraftEngine custom items for tile visuals when available.
+      preferCustomItems: true
+
+    furniture:
+      # Prefer CraftEngine furniture hitboxes for table and seat interaction.
+      preferHitboxInteraction: true
+
 debug:
   enabled: false
+
+  # Empty means all categories when debug is enabled.
   categories:
     - lifecycle
     - table
@@ -27,11 +76,3 @@ debug:
     - packet
     - render
     - database
-craftengine:
-  exportBundleOnEnable: true
-  preferCustomItems: true
-  preferFurnitureHitbox: true
-  bundleFolder: mahjongpaper
-tablePersistence:
-  enabled: true
-  file: tables.yml

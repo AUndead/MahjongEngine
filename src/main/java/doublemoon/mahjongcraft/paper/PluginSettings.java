@@ -28,15 +28,15 @@ public final class PluginSettings {
     }
 
     public static PluginSettings from(FileConfiguration config) {
-        ConfigurationSection databaseSection = config.getConfigurationSection("database");
-        ConfigurationSection tablePersistenceSection = config.getConfigurationSection("tablePersistence");
+        ConfigurationSection databaseSection = ConfigAccess.firstSection(config, "database");
+        ConfigurationSection tablePersistenceSection = ConfigAccess.firstSection(config, "tables.persistence", "tablePersistence");
         return new PluginSettings(
-            config.getConfigurationSection("debug"),
+            ConfigAccess.firstSection(config, "debug"),
             databaseSection,
-            config.getConfigurationSection("craftengine"),
-            databaseSection != null && databaseSection.getBoolean("failOnError", false),
-            tablePersistenceSection == null || tablePersistenceSection.getBoolean("enabled", true),
-            tablePersistenceSection == null ? "tables.yml" : tablePersistenceSection.getString("file", "tables.yml")
+            ConfigAccess.firstSection(config, "integrations.craftengine", "craftengine"),
+            ConfigAccess.bool(databaseSection, false, "failOnError"),
+            ConfigAccess.bool(tablePersistenceSection, true, "enabled"),
+            ConfigAccess.string(tablePersistenceSection, "tables.yml", "file")
         );
     }
 

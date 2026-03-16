@@ -1,5 +1,6 @@
 package doublemoon.mahjongcraft.paper.debug;
 
+import doublemoon.mahjongcraft.paper.ConfigAccess;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -13,8 +14,8 @@ public final class DebugService {
     public DebugService(Logger logger, ConfigurationSection section) {
         this(
             logger,
-            section != null && section.getBoolean("enabled", false),
-            section == null ? Set.of() : section.getStringList("categories")
+            ConfigAccess.bool(section, false, "enabled"),
+            ConfigAccess.stringList(section, "categories")
         );
     }
 

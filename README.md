@@ -1,73 +1,62 @@
 # MahjongPaper
 
-中文说明请见 [`README.zh-CN.md`](./README.zh-CN.md)。
+Chinese documentation: [README.zh-CN.md](./README.zh-CN.md)
 
-`MahjongPaper` is a Paper plugin rewrite scaffold for `MahjongCraft` that uses:
+`MahjongPaper` is a Paper plugin rewrite of `MahjongCraft` built around:
 
-- Paper `ItemDisplay` and `TextDisplay`
-- `ItemMeta#setItemModel(...)` with a matching resource pack
-- CraftEngine furniture interaction and culling
+- Paper display entities
+- `ItemMeta#setItemModel(...)` plus the bundled resource pack
+- CraftEngine custom items, furniture hitboxes, and culling integration
 
-## Status
+## Current Scope
 
-This repository currently includes a playable Paper-based Riichi Mahjong port foundation:
+The current branch already supports a playable Riichi Mahjong flow on Paper:
 
-- table creation and joining
-- fixed east/south/west/north seat labels with click-to-join and click-to-ready lobby flow
-- 4-seat riichi wall generation with red fives
-- dealing, drawing and discarding
-- riichi, tsumo, ron, chii, pon, minkan, ankan and kakan flows
-- yaku / fu / han / score settlement through `mahjong-utils`
-- furiten checks, chankan, rinshan kaihou, suufon renda, suucha riichi, suukaikan and kyuushu kyuuhai
-- nagashi mangan handling on exhaustive draw
-- display-entity table rendering with hidden-information hands
-- owner-only face-up hand rendering plus public face-down hand rendering
-- CraftEngine-backed click-to-discard interaction
-- automatic settlement inventory UI and clickable reaction prompts
-- pre-round rule configuration and lobby summaries
-- local filler bots for unattended seats
-- spectator mode with private overlays and private hand/front visibility control
-- per-viewer localized HUD overlays, turn prompts and settlement messaging
-- MiniMessage-based player messaging with `zh-CN` / fallback English localization
-- locale-aware number formatting in command and settlement surfaces
-- H2-backed round history persistence by default, with optional MariaDB support and startup schema creation
-- CraftEngine bundle export with CraftEngine-backed table hitboxes and entity culling integration
-- persistent lobby-style tables that survive restart and render before the round begins
+- lobby-style tables that can persist across restart
+- empty-table creation, fixed east/south/west/north seats, click-to-join, and click-to-ready
+- automatic round start once 4 seats are filled and all seated players are ready
+- bots for unattended seats, with bots treated as ready by default
+- leaving before the round starts, or deferred leave after the current hand ends
+- dealing, drawing, discarding, riichi, tsumo, ron, chii, pon, minkan, ankan, and kakan
+- score settlement through `mahjong-utils`
+- spectator mode, private hand visibility, HUD overlays, and localized prompts
+- CraftEngine-backed seat/table interaction and CraftEngine bundle export
+- round history persistence through H2 by default, with optional MariaDB
 
-It is still not fully at feature parity with upstream `MahjongCraft`. The largest remaining gaps are the original mod's more specialized client UX surface, additional board choreography/animation polish, and broader end-to-end parity verification against every upstream interaction edge case.
+## Command Summary
 
-## Commands
+- `/mahjong help`: show in-game command help
+- `/mahjong create`: create a new empty table at your location
+- `/mahjong botmatch [hanchan|tonpuu]`: create a 4-bot test match and spectate it
+- `/mahjong mode <tonpuu|hanchan>`: apply a preset before the next start
+- `/mahjong join <tableId>`: join a table as a player
+- `/mahjong leave`: leave immediately before the hand starts, or queue a leave after the current hand
+- `/mahjong list`: list active tables and their locations
+- `/mahjong start`: toggle ready status for your seat
+- `/mahjong spectate <tableId>`: spectate a table
+- `/mahjong unspectate`: stop spectating
+- `/mahjong addbot` and `/mahjong removebot`: manage bots before the round starts
+- `/mahjong rule [key] [value]`: view or change table rules before the next start
+- `/mahjong state`: show the current table summary
+- `/mahjong riichi <index>`, `/mahjong tsumo`, `/mahjong ron`, `/mahjong pon`, `/mahjong minkan`, `/mahjong chii <tileA> <tileB>`, `/mahjong kan <tile>`, `/mahjong skip`, `/mahjong kyuushu`: round actions
+- `/mahjong settlement`: reopen the latest settlement UI
+- `/mahjong render`, `/mahjong clear`, `/mahjong inspect`: table render maintenance and diagnostics
+- `/mahjong forceend [tableId]`: admin command to stop a running match
+- `/mahjong deletetable [tableId]`: admin command to delete a table
 
-- `/mahjong help`: show the in-game command help with explanations
-- `/mahjong create`: create a new table at your position
-- `/mahjong botmatch [hanchan|tonpuu]`: create and start a 4-bot full-match test table, then spectate it
-- `/mahjong mode <tonpuu|hanchan>`: apply a Mahjong Soul-style east-only or hanchan preset
-- `/mahjong join <tableId>`: join an existing table as a player
-- `/mahjong leave`: leave your current table or stop spectating
-- `/mahjong list`: show active tables and their locations
-- `/mahjong spectate <tableId>`: watch a table without taking a seat
-- `/mahjong unspectate`: stop spectating the current table
-- `/mahjong addbot`: fill one empty seat with a bot
-- `/mahjong removebot`: remove one bot before the round starts
-- `/mahjong rule [key] [value]`: view or change table rules before starting
-- `/mahjong start`: toggle ready; the round auto-starts once all 4 seats are filled and ready
-- `/mahjong state`: show the current table and round state
-- `/mahjong riichi <index>`: declare riichi and discard the chosen tile index
-- `/mahjong tsumo`: claim a self-draw win if your hand is ready
-- `/mahjong ron`: claim a win on another player's discard
-- `/mahjong pon`: call pon on the current reaction window
-- `/mahjong minkan`: call an open kan on the current reaction window
-- `/mahjong chii <tileA> <tileB>`: call chii with the listed two tiles from your hand
-- `/mahjong kan <tile>`: declare ankan or kakan with the given tile kind
-- `/mahjong skip`: pass the current reaction opportunity
-- `/mahjong kyuushu`: declare nine terminals and honors abortive draw
-- `/mahjong settlement`: reopen the latest settlement UI for this table
-- `/mahjong render`: force a table display refresh
-- `/mahjong clear`: remove current display entities for the table
-- `/mahjong forceend [tableId]`: admin command to stop a running match and return the table to waiting state
-- `/mahjong deletetable [tableId]`: admin command to immediately remove a table
+Admin targeting details:
 
-Mahjong Soul-style defaults are now used for new tables: 4-player riichi, 25,000 start, 30,000 target, red fives enabled, open tanyao enabled, and final match score calculated with no oka and `+15/+5/-5/-15` placement bonus.
+- `forceend` and `deletetable` accept an explicit `tableId`
+- if omitted, they first try the table you are in or spectating
+- if you are not attached to a table, they fall back to the nearest table within range
+
+## Lobby Flow
+
+- `/mahjong create` creates an empty table only; it does not auto-seat the creator
+- players join a fixed seat by interacting with that seat's floating label
+- the same seat label is used to toggle ready before the match starts
+- a round starts automatically only when all 4 seats are filled and all seated players are ready
+- after a hand or a full match ends, players must ready again before the next start
 
 ## Build
 
@@ -75,54 +64,53 @@ Mahjong Soul-style defaults are now used for new tables: 4-player riichi, 25,000
 .\gradlew.bat build
 ```
 
-The plugin expects the CraftEngine plugin to be installed on the server because it is declared as a dependency in `plugin.yml`.
-The build now produces a thin jar. Runtime libraries are resolved by the Paper plugin loader declared in [`paper-plugin.yml`](./src/main/resources/paper-plugin.yml); `plugin.yml` is still kept for command and permission registration.
-Database settings live in [`config.yml`](./src/main/resources/config.yml); the default database type is `h2`, and you can switch `database.type` to `mariadb` if needed. Round settlements are written asynchronously to `round_history` and `round_player_result`.
+The plugin currently declares CraftEngine as a required dependency in [plugin.yml](./src/main/resources/plugin.yml), so CraftEngine must be present at runtime.
 
-Configuration values are snapshotted during plugin startup. If you change `config.yml`, restart the server/plugin process so the updated CraftEngine, database, and persistence settings are picked up together.
+## Configuration
 
-Recommended runtime stack for the current branch:
+The default config lives at [src/main/resources/config.yml](./src/main/resources/config.yml).
 
-- Paper
-- CraftEngine
+The current human-friendly layout is:
 
-MahjongPaper currently expects CraftEngine at runtime. Table hitboxes are exported as CraftEngine furniture, display-entity culling is bridged into CraftEngine's tracked-entity culling system, and tile-click interaction now uses CraftEngine furniture interaction instead of the old PacketEvents bridge.
+- `database.connection`: database type and MariaDB connection target
+- `database.credentials`: MariaDB username and password
+- `database.h2`: local embedded H2 settings
+- `database.pool`: connection pool sizing
+- `tables.persistence`: persistent table restore file
+- `integrations.craftengine`: CraftEngine export and interaction preferences
+- `debug`: debug logging switches
 
-## Resource Pack
+Notes:
 
-The matching pack is in [`resourcepack`](./resourcepack).
-It is authored in the 1.21.11-style `pack.mcmeta` format using `min_format` / `max_format` with resource pack version `75.0`.
-
-For the current prototype the plugin uses the `mahjongcraft` namespace and binds tile displays to paths like:
-
-- `mahjongcraft:mahjong_tile/m1`
-- `mahjongcraft:mahjong_tile/east`
-- `mahjongcraft:mahjong_tile/back`
+- configuration is snapshotted during startup
+- restart after editing `config.yml`
+- older flat keys are still accepted for backward compatibility
 
 ## CraftEngine
 
-If CraftEngine is installed, MahjongPaper will export a ready-to-use CraftEngine bundle to `plugins/CraftEngine/resources/mahjongpaper` on startup by default.
+When CraftEngine is installed, MahjongPaper exports a bundle to:
 
-The exported bundle contains:
+- `plugins/CraftEngine/resources/mahjongpaper`
+
+The exported bundle includes:
 
 - `pack.yml`
 - `configuration/items/mahjong_tiles.yml`
 - `resourcepack/assets/mahjongcraft/...`
 
-The exported item config now also contains `mahjongpaper:table_hitbox`, which MahjongPaper places as CraftEngine furniture for the table collision volume.
+MahjongPaper currently uses CraftEngine for:
 
-Current CraftEngine integration covers:
+- custom mahjong tile items
+- table and seat hitbox furniture
+- tracked entity culling integration
+- furniture interaction routing for table interaction
 
-- custom tile items such as `mahjongpaper:east`
-- table hitboxes via CraftEngine furniture
-- display-entity culling via CraftEngine tracked `Cullable` entities
+## Resource Pack
 
-When CraftEngine is present and its custom items are available, display and settlement tiles will prefer the generated CraftEngine item IDs such as `mahjongpaper:east` and fall back to direct `item_model` items if needed.
-
-Important: CraftEngine entity culling must be enabled in CraftEngine's own config if you want MahjongPaper display culling to be active. MahjongPaper no longer ships its old standalone `clientOptimization.entityCulling` config section.
+The bundled resource pack lives in [resourcepack](./resourcepack).
 
 ## Upstream References
 
-- `MahjongCraft`: gameplay and assets source
-- `Paper`: display entities and `item_model` API
-- `CraftEngine`: custom items, furniture hitboxes, culling and interaction bridge
+- `MahjongCraft`
+- `Paper`
+- `CraftEngine`

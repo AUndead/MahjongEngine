@@ -1,5 +1,6 @@
 package doublemoon.mahjongcraft.paper.compat;
 
+import doublemoon.mahjongcraft.paper.ConfigAccess;
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.render.DisplayClickAction;
@@ -72,10 +73,10 @@ public final class CraftEngineService {
 
     public CraftEngineService(MahjongPaperPlugin plugin, ConfigurationSection section) {
         this.plugin = plugin;
-        this.exportBundleOnEnable = section == null || section.getBoolean("exportBundleOnEnable", true);
-        this.preferCustomItems = section == null || section.getBoolean("preferCustomItems", true);
-        this.preferFurnitureHitbox = section == null || section.getBoolean("preferFurnitureHitbox", true);
-        this.bundleFolderName = section == null ? "mahjongpaper" : section.getString("bundleFolder", "mahjongpaper");
+        this.exportBundleOnEnable = ConfigAccess.bool(section, true, "exportBundleOnEnable", "bundle.exportOnEnable");
+        this.preferCustomItems = ConfigAccess.bool(section, true, "preferCustomItems", "items.preferCustomItems");
+        this.preferFurnitureHitbox = ConfigAccess.bool(section, true, "preferFurnitureHitbox", "furniture.preferHitboxInteraction");
+        this.bundleFolderName = ConfigAccess.string(section, "mahjongpaper", "bundleFolder", "bundle.folder");
     }
 
     public void initializeAfterStartup() {

@@ -2,6 +2,7 @@ package doublemoon.mahjongcraft.paper.db;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import doublemoon.mahjongcraft.paper.ConfigAccess;
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.riichi.RoundResolution;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreItem;
@@ -49,7 +50,7 @@ public final class DatabaseService {
     }
 
     public static boolean isEnabled(ConfigurationSection config) {
-        return config != null && config.getBoolean("enabled", true);
+        return ConfigAccess.bool(config, true, "enabled");
     }
 
     public void close() {
@@ -76,36 +77,36 @@ public final class DatabaseService {
         HikariConfig hikari = new HikariConfig();
         ConfigurationSection pool = pool(config);
         hikari.setPoolName("MahjongPaper-" + this.databaseType.toUpperCase(Locale.ROOT));
-        hikari.setMaximumPoolSize(pool.getInt("maximumPoolSize", 10));
-        hikari.setMinimumIdle(pool.getInt("minimumIdle", 2));
-        hikari.setConnectionTimeout(pool.getLong("connectionTimeoutMillis", 10000L));
+        hikari.setMaximumPoolSize(ConfigAccess.integer(pool, 10, "maxSize", "maximumPoolSize"));
+        hikari.setMinimumIdle(ConfigAccess.integer(pool, 2, "minIdle", "minimumIdle"));
+        hikari.setConnectionTimeout(ConfigAccess.longValue(pool, 10000L, "connectionTimeoutMillis"));
         hikari.setAutoCommit(true);
         hikari.setConnectionTestQuery("SELECT 1");
 
         if ("h2".equals(this.databaseType)) {
             ConfigurationSection h2 = this.h2(config);
-            String rawPath = Objects.requireNonNull(h2.getString("path"), "database.h2.path");
+            String rawPath = Objects.requireNonNull(ConfigAccess.string(h2, null, "path"), "database.h2.path");
             Path resolvedPath = DatabasePaths.resolveH2FilePath(this.plugin.getDataFolder().toPath(), rawPath);
             Path parent = resolvedPath.getParent();
             if (parent != null) {
                 parent.toFile().mkdirs();
             }
             hikari.setDriverClassName("org.h2.Driver");
-            hikari.setJdbcUrl("jdbc:h2:file:" + resolvedPath.toString().replace('\\', '/') + appendH2Parameters(h2.getString("parameters", "")));
-            hikari.setUsername(h2.getString("username", "sa"));
-            hikari.setPassword(h2.getString("password", ""));
+            hikari.setJdbcUrl("jdbc:h2:file:" + resolvedPath.toString().replace('\\', '/') + appendH2Parameters(ConfigAccess.string(h2, "", "parameters")));
+            hikari.setUsername(ConfigAccess.string(h2, "sa", "username"));
+            hikari.setPassword(ConfigAccess.string(h2, "", "password"));
             return hikari;
         }
 
-        String host = Objects.requireNonNull(config.getString("host"), "database.host");
-        int port = config.getInt("port", 3306);
-        String database = Objects.requireNonNull(config.getString("name"), "database.name");
-        String parameters = config.getString("parameters", "");
+        String host = Objects.requireNonNull(ConfigAccess.string(config, null, "connection.host", "host"), "database.host");
+        int port = ConfigAccess.integer(config, 3306, "connection.port", "port");
+        String database = Objects.requireNonNull(ConfigAccess.string(config, null, "connection.name", "name"), "database.name");
+        String parameters = ConfigAccess.string(config, "", "connection.parameters", "parameters");
 
         hikari.setDriverClassName("org.mariadb.jdbc.Driver");
         hikari.setJdbcUrl("jdbc:mariadb://" + host + ":" + port + "/" + database + (parameters.isBlank() ? "" : "?" + parameters));
-        hikari.setUsername(Objects.requireNonNull(config.getString("username"), "database.username"));
-        hikari.setPassword(config.getString("password", ""));
+        hikari.setUsername(Objects.requireNonNull(ConfigAccess.string(config, null, "credentials.username", "username"), "database.username"));
+        hikari.setPassword(ConfigAccess.string(config, "", "credentials.password", "password"));
         return hikari;
     }
 
@@ -293,7 +294,7 @@ public final class DatabaseService {
     }
 
     private static ConfigurationSection pool(ConfigurationSection config) {
-        ConfigurationSection pool = config.getConfigurationSection("pool");
+        ConfigurationSection pool = ConfigAccess.firstSection(config, "pool");
         if (pool == null) {
             throw new IllegalStateException("database.pool section is required");
         }
@@ -301,11 +302,11 @@ public final class DatabaseService {
     }
 
     private ConfigurationSection h2(ConfigurationSection config) {
-        return Objects.requireNonNull(config.getConfigurationSection("h2"), "database.h2");
+        return Objects.requireNonNull(ConfigAccess.firstSection(config, "h2"), "database.h2");
     }
 
     private static String normalizedType(ConfigurationSection config) {
-        String type = config.getString("type", "h2").trim().toLowerCase(Locale.ROOT);
+        String type = ConfigAccess.string(config, "h2", "connection.type", "type").trim().toLowerCase(Locale.ROOT);
         return switch (type) {
             case "mariadb", "h2" -> type;
             default -> throw new IllegalArgumentException("Unsupported database.type: " + type);
@@ -324,25 +325,25 @@ public final class DatabaseService {
     private String userFacingReason(ConfigurationSection config, Throwable rootCause) {
         if ("h2".equals(this.databaseType)) {
             ConfigurationSection h2 = this.h2(config);
-            String rawPath = h2.getString("path", "data/mahjongpaper");
+            String rawPath = ConfigAccess.string(h2, "data/mahjongpaper", "path");
             Path resolvedPath = DatabasePaths.resolveH2FilePath(this.plugin.getDataFolder().toPath(), rawPath);
             return "Could not open the H2 database file. Resolved path: " + resolvedPath
                 + ". Check database.h2.path and make sure the plugin folder is writable.";
         }
 
-        String host = config.getString("host", "127.0.0.1");
-        int port = config.getInt("port", 3306);
-        String database = config.getString("name", "mahjongpaper");
+        String host = ConfigAccess.string(config, "127.0.0.1", "connection.host", "host");
+        int port = ConfigAccess.integer(config, 3306, "connection.port", "port");
+        String database = ConfigAccess.string(config, "mahjongpaper", "connection.name", "name");
         String target = host + ":" + port + "/" + database;
         String message = Objects.toString(rootCause.getMessage(), "");
         String lower = message.toLowerCase(Locale.ROOT);
         if (rootCause instanceof ConnectException || lower.contains("connection refused") || lower.contains("connect")) {
             return "Could not connect to MariaDB at " + target
-                + ". Check that the database server is running and verify database.host, database.port, database.name, database.username, and database.password.";
+                + ". Check that the database server is running and verify database.connection.host, database.connection.port, database.connection.name, and database.credentials.";
         }
         if (lower.contains("access denied") || lower.contains("authentication")) {
             return "MariaDB authentication failed for " + target
-                + ". Check database.username and database.password.";
+                + ". Check database.credentials.username and database.credentials.password.";
         }
         return "MariaDB initialization failed for " + target
             + ". Check the database connection settings and network availability.";
