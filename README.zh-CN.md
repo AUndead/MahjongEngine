@@ -1,5 +1,7 @@
 # MahjongPaper
 
+> 本项目完全由 AI 创作。
+
 英文说明见 [README.md](./README.md)。
 
 `MahjongPaper` 是 `MahjongCraft` 的 Paper 插件重写版本，当前主要基于：

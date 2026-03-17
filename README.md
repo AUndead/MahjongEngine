@@ -1,5 +1,7 @@
 # MahjongPaper
 
+> This project was created entirely by AI.
+
 Chinese documentation: [README.zh-CN.md](./README.zh-CN.md)
 
 `MahjongPaper` is a Paper plugin rewrite of `MahjongCraft` built around:
