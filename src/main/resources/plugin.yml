@@ -1,5 +1,5 @@
-﻿name: MahjongPaper
-main: doublemoon.mahjongcraft.paper.MahjongPaperPlugin
+name: MahjongPaper
+main: doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin
 version: ${version}
 api-version: "1.21.11"
 author: OpenAI

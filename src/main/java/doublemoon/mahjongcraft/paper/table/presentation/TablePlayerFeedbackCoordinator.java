@@ -1,0 +1,262 @@
+package doublemoon.mahjongcraft.paper.table;
+
+import doublemoon.mahjongcraft.paper.riichi.ReactionOptions;
+import doublemoon.mahjongcraft.paper.table.presentation.SettlementFeedbackGate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import kotlin.Pair;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+
+final class TablePlayerFeedbackCoordinator {
+    private final MahjongTableSession session;
+    private final Map<UUID, String> feedbackState = new HashMap<>();
+    private String lastSettlementFingerprint = "";
+    private String lastPersistedSettlementFingerprint = "";
+    private String lastPersistedRankFingerprint = "";
+
+    TablePlayerFeedbackCoordinator(MahjongTableSession session) {
+        this.session = session;
+    }
+
+    void sync() {
+        if (this.session.engine() == null) {
+            this.resetState();
+            return;
+        }
+
+        String settlementFingerprint = Objects.toString(this.session.engine().getLastResolution(), "");
+        this.persistSettlementIfNeeded(settlementFingerprint);
+        this.persistRankIfNeeded(settlementFingerprint);
+        boolean settlementChanged = SettlementFeedbackGate.isNewSettlement(settlementFingerprint, this.lastSettlementFingerprint);
+        if (settlementChanged) {
+            this.lastSettlementFingerprint = settlementFingerprint;
+        }
+        this.syncSettlementFeedback(settlementFingerprint, settlementChanged);
+        this.syncSeatFeedbackStates();
+    }
+
+    void clearPlayerState(UUID playerId) {
+        this.feedbackState.remove(playerId);
+    }
+
+    void resetForRoundStart() {
+        this.lastSettlementFingerprint = "";
+        this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
+    }
+
+    void resetState() {
+        this.feedbackState.clear();
+        this.lastSettlementFingerprint = "";
+        this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
+        this.session.cancelNextRoundCountdownForFeedback();
+    }
+
+    private void persistSettlementIfNeeded(String settlementFingerprint) {
+        if (settlementFingerprint.isBlank()
+            || settlementFingerprint.equals(this.lastPersistedSettlementFingerprint)
+            || this.session.plugin().database() == null) {
+            return;
+        }
+        this.session.plugin().database().persistRoundResultAsync(this.session, this.session.engine().getLastResolution());
+        this.lastPersistedSettlementFingerprint = settlementFingerprint;
+    }
+
+    private void persistRankIfNeeded(String settlementFingerprint) {
+        if (settlementFingerprint.isBlank()
+            || settlementFingerprint.equals(this.lastPersistedRankFingerprint)
+            || this.session.plugin().database() == null
+            || !this.session.plugin().database().rankingEnabled()) {
+            return;
+        }
+        List<MahjongTableSession.FinalStanding> standings = this.session.finalStandings();
+        if (standings.isEmpty()) {
+            return;
+        }
+        this.session.plugin().database().persistMatchRanksAsync(
+            this.session.id(),
+            this.session.configuredRuleSnapshot().getLength(),
+            standings
+        );
+        this.lastPersistedRankFingerprint = settlementFingerprint;
+    }
+
+    private void syncSettlementFeedback(String settlementFingerprint, boolean settlementChanged) {
+        if (settlementFingerprint.isBlank() || !settlementChanged) {
+            return;
+        }
+        this.session.resetReadyStateForNextRoundForFeedback();
+        this.session.render();
+        this.openSettlementForViewers();
+        this.session.cancelNextRoundCountdownForFeedback();
+        this.session.promptPlayersToReadyForFeedback();
+    }
+
+    private void openSettlementForViewers() {
+        for (Player player : this.session.viewers()) {
+            this.session.openSettlementUi(player);
+            if (!this.session.engine().getGameFinished()) {
+                this.session.plugin().messages().send(player, "table.round_finished_ready");
+            } else {
+                this.session.plugin().messages().send(player, "table.match_finished_ready");
+            }
+        }
+    }
+
+    private void syncSeatFeedbackStates() {
+        for (UUID playerId : this.session.seatIds()) {
+            if (playerId == null || this.session.isBot(playerId)) {
+                continue;
+            }
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null) {
+                continue;
+            }
+            this.syncSeatFeedbackState(player, this.capturePlayerFeedbackSnapshot(player, playerId));
+        }
+    }
+
+    private void syncSeatFeedbackState(Player player, PlayerFeedbackSnapshot snapshot) {
+        String previous = this.feedbackState.put(snapshot.playerId(), snapshot.signature());
+        if (Objects.equals(snapshot.signature(), previous)) {
+            return;
+        }
+        if (snapshot.signature().isBlank()) {
+            player.sendActionBar(Component.empty());
+            return;
+        }
+        this.sendFeedback(player, snapshot);
+    }
+
+    private void sendFeedback(Player player, PlayerFeedbackSnapshot snapshot) {
+        if (snapshot.actionBar() != null) {
+            player.sendActionBar(snapshot.actionBar());
+        }
+        if (snapshot.reactionPrompt() != null) {
+            player.sendMessage(snapshot.reactionPrompt());
+        }
+    }
+
+    private PlayerFeedbackSnapshot capturePlayerFeedbackSnapshot(Player player, UUID playerId) {
+        Locale locale = this.session.plugin().messages().resolveLocale(player);
+        ReactionOptions options = this.session.engine().availableReactions(playerId.toString());
+        if (options != null && this.session.engine().getPendingReaction() != null) {
+            Component actionBar = this.session.plugin().messages().render(locale, "table.reaction_available");
+            Component reactionPrompt = this.reactionPrompt(locale, options);
+            String signature = fingerprintBuilder(192)
+                .field("reaction")
+                .field(playerId)
+                .field(this.session.engine().getPendingReaction().getTile().getId())
+                .field(options)
+                .toString();
+            return new PlayerFeedbackSnapshot(playerId, signature, actionBar, reactionPrompt);
+        }
+        if (this.session.engine().getStarted() && this.session.engine().getCurrentPlayer().getUuid().equals(playerId.toString())) {
+            List<String> actions = new ArrayList<>(4);
+            if (this.session.engine().getCurrentPlayer().isRiichiable()) {
+                actions.add("/mahjong riichi <index>");
+            }
+            if (this.session.engine().getCurrentPlayer().getCanAnkan() || this.session.engine().getCurrentPlayer().getCanKakan()) {
+                actions.add("/mahjong kan <tile>");
+            }
+            if (this.session.engine().canKyuushuKyuuhai(playerId.toString())) {
+                actions.add("/mahjong kyuushu");
+            }
+            actions.add("/mahjong tsumo");
+            String suffix = actions.isEmpty() ? "" : " | " + String.join(" ", actions);
+            Component actionBar = this.session.plugin().messages().render(
+                locale,
+                "table.turn_prompt",
+                this.session.plugin().messages().tag("suffix", suffix)
+            );
+            String signature = fingerprintBuilder(192)
+                .field("turn")
+                .field(playerId)
+                .field(this.session.engine().getWall().size())
+                .field(this.session.engine().getCurrentPlayer().isRiichiable())
+                .field(this.session.engine().getCurrentPlayer().getCanAnkan())
+                .field(this.session.engine().getCurrentPlayer().getCanKakan())
+                .field(this.session.engine().canKyuushuKyuuhai(playerId.toString()))
+                .field(suffix)
+                .toString();
+            return new PlayerFeedbackSnapshot(playerId, signature, actionBar, null);
+        }
+        return new PlayerFeedbackSnapshot(playerId, "", null, null);
+    }
+
+    private Component reactionPrompt(Locale locale, ReactionOptions options) {
+        Component message = this.session.plugin().messages().render(locale, "table.reactions_prefix");
+        if (options.getCanRon()) {
+            message = message.append(this.actionButton(this.session.plugin().messages().plain(locale, "table.action.ron"), "/mahjong ron", NamedTextColor.RED))
+                .append(Component.space());
+        }
+        if (options.getCanPon()) {
+            message = message.append(this.actionButton(this.session.plugin().messages().plain(locale, "table.action.pon"), "/mahjong pon", NamedTextColor.YELLOW))
+                .append(Component.space());
+        }
+        if (options.getCanMinkan()) {
+            message = message.append(this.actionButton(this.session.plugin().messages().plain(locale, "table.action.minkan"), "/mahjong minkan", NamedTextColor.DARK_AQUA))
+                .append(Component.space());
+        }
+        for (Pair<doublemoon.mahjongcraft.paper.riichi.model.MahjongTile, doublemoon.mahjongcraft.paper.riichi.model.MahjongTile> pair : options.getChiiPairs()) {
+            String command = "/mahjong chii " + pair.getFirst().name().toLowerCase(Locale.ROOT) + " " + pair.getSecond().name().toLowerCase(Locale.ROOT);
+            String label = this.session.plugin().messages().plain(locale, "table.action.chii") + " "
+                + this.session.tileLabelForDisplay(locale, pair.getFirst().name()) + " "
+                + this.session.tileLabelForDisplay(locale, pair.getSecond().name());
+            message = message.append(this.actionButton(label, command, NamedTextColor.GREEN)).append(Component.space());
+        }
+        return message.append(this.actionButton(this.session.plugin().messages().plain(locale, "table.action.skip"), "/mahjong skip", NamedTextColor.GRAY));
+    }
+
+    private Component actionButton(String label, String command, NamedTextColor color) {
+        return Component.text("[" + label + "]", color)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text(command, NamedTextColor.GRAY)));
+    }
+
+    private static FingerprintBuilder fingerprintBuilder(int capacity) {
+        return new FingerprintBuilder(capacity);
+    }
+
+    private record PlayerFeedbackSnapshot(
+        UUID playerId,
+        String signature,
+        Component actionBar,
+        Component reactionPrompt
+    ) {
+    }
+
+    private static final class FingerprintBuilder {
+        private final StringBuilder delegate;
+        private boolean needsSeparator;
+
+        private FingerprintBuilder(int capacity) {
+            this.delegate = new StringBuilder(capacity);
+        }
+
+        private FingerprintBuilder field(Object value) {
+            if (this.needsSeparator) {
+                this.delegate.append(':');
+            }
+            this.delegate.append(Objects.toString(value, ""));
+            this.needsSeparator = true;
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return this.delegate.toString();
+        }
+    }
+}

@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.display;
 
 import java.util.Collection;
 import java.util.Map;

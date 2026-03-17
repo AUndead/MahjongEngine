@@ -1,12 +1,14 @@
-package doublemoon.mahjongcraft.paper;
+package doublemoon.mahjongcraft.paper.bootstrap;
 
 import doublemoon.mahjongcraft.paper.command.MahjongCommand;
 import doublemoon.mahjongcraft.paper.compat.CraftEngineService;
+import doublemoon.mahjongcraft.paper.config.PluginSettings;
 import doublemoon.mahjongcraft.paper.debug.DebugService;
 import doublemoon.mahjongcraft.paper.db.DatabaseService;
 import doublemoon.mahjongcraft.paper.i18n.MessageService;
-import doublemoon.mahjongcraft.paper.render.DisplayVisibilityRegistry;
-import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.render.display.DisplayVisibilityRegistry;
+import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.runtime.AsyncService;
 import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
 import java.util.Objects;
 import java.util.logging.Level;

@@ -1,6 +1,6 @@
 package doublemoon.mahjongcraft.paper.command;
 
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.db.MahjongSoulRankProfile;
 import doublemoon.mahjongcraft.paper.db.MahjongSoulRankRules;
 import doublemoon.mahjongcraft.paper.i18n.MessageService;

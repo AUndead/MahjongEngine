@@ -1,0 +1,1628 @@
+package doublemoon.mahjongcraft.paper.table;
+
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.i18n.LocalizedMessages;
+import doublemoon.mahjongcraft.paper.model.SeatWind;
+import doublemoon.mahjongcraft.paper.render.scene.MeldView;
+import doublemoon.mahjongcraft.paper.render.layout.TableRenderLayout;
+import doublemoon.mahjongcraft.paper.render.scene.TableRenderer;
+import doublemoon.mahjongcraft.paper.riichi.ReactionResponse;
+import doublemoon.mahjongcraft.paper.riichi.RiichiPlayerState;
+import doublemoon.mahjongcraft.paper.riichi.RiichiRoundEngine;
+import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
+import doublemoon.mahjongcraft.paper.riichi.model.MahjongSoulScoring;
+import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
+import doublemoon.mahjongcraft.paper.table.presentation.TablePublicTextFactory;
+import doublemoon.mahjongcraft.paper.ui.SettlementUi;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import net.kyori.adventure.bossbar.BossBar;
+import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
+
+public final class MahjongTableSession {
+    private static final long NEXT_ROUND_DELAY_MILLIS = 8000L;
+
+    private final MahjongPaperPlugin plugin;
+    private final String id;
+    private final Location center;
+    private final boolean persistentRoom;
+    private final List<UUID> seats = new ArrayList<>(Collections.nCopies(4, null));
+    private final Set<UUID> spectators = new LinkedHashSet<>();
+    private final TableRenderer renderer = new TableRenderer();
+    private final TableRenderSnapshotFactory renderSnapshotFactory = new TableRenderSnapshotFactory();
+    private final TableRegionFingerprintService regionFingerprintService = new TableRegionFingerprintService();
+    private final Map<UUID, String> botNames = new LinkedHashMap<>();
+    private final Map<UUID, Integer> selectedHandTileIndices = new HashMap<>();
+    private final Set<UUID> readyPlayers = new LinkedHashSet<>();
+    private final Set<UUID> leaveAfterRoundPlayers = new LinkedHashSet<>();
+    private MahjongRule configuredRule;
+    private RiichiRoundEngine engine;
+    private doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile;
+    private UUID lastPublicDiscardPlayerId;
+    private long nextRoundDeadlineMillis;
+    private int nextBotNumber = 1;
+    private BukkitTask botTask;
+    private final TableRenderCoordinator renderCoordinator;
+    private final TableViewerPresentationCoordinator viewerPresentation;
+    private final TableRegionDisplayCoordinator regionDisplayCoordinator;
+    private final TableRenderInspectCoordinator renderInspectCoordinator;
+    private final TableLifecycleCoordinator lifecycleCoordinator;
+    private final TableViewerSnapshotFactory viewerSnapshotFactory;
+    private final TablePlayerFeedbackCoordinator playerFeedbackCoordinator;
+    private final TableStateSoundCoordinator stateSoundCoordinator;
+    private final TablePublicTextFactory publicTextFactory;
+
+    public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, Player owner) {
+        this(plugin, id, center, majsoulRule(MahjongRule.GameLength.TWO_WIND), true);
+        this.addPlayer(owner);
+    }
+
+    public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, boolean persistentRoom) {
+        this(plugin, id, center, majsoulRule(MahjongRule.GameLength.TWO_WIND), persistentRoom);
+    }
+
+    public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, Player owner, boolean persistentRoom) {
+        this(plugin, id, center, majsoulRule(MahjongRule.GameLength.TWO_WIND), persistentRoom);
+        this.addPlayer(owner);
+    }
+
+    public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, MahjongRule configuredRule, boolean persistentRoom) {
+        this.plugin = plugin;
+        this.id = id;
+        this.center = normalizedTableCenter(center);
+        this.configuredRule = copyRule(configuredRule);
+        this.persistentRoom = persistentRoom;
+        this.renderCoordinator = new TableRenderCoordinator(this);
+        this.viewerPresentation = new TableViewerPresentationCoordinator(this);
+        this.regionDisplayCoordinator = new TableRegionDisplayCoordinator(this, this.regionFingerprintService);
+        this.renderInspectCoordinator = new TableRenderInspectCoordinator(this);
+        this.lifecycleCoordinator = new TableLifecycleCoordinator(this);
+        this.viewerSnapshotFactory = new TableViewerSnapshotFactory(this);
+        this.playerFeedbackCoordinator = new TablePlayerFeedbackCoordinator(this);
+        this.stateSoundCoordinator = new TableStateSoundCoordinator(this);
+        this.publicTextFactory = new TablePublicTextFactory(this);
+    }
+
+    public MahjongPaperPlugin plugin() {
+        return this.plugin;
+    }
+
+    public String id() {
+        return this.id;
+    }
+
+    public boolean isPersistentRoom() {
+        return this.persistentRoom;
+    }
+
+    public Location center() {
+        return normalizedTableCenter(this.center);
+    }
+
+    public Location seatAnchorLocation(SeatWind wind) {
+        return wind == null ? this.center() : this.renderer.seatAnchorLocation(this, wind);
+    }
+
+    public float seatFacingYaw(SeatWind wind) {
+        return wind == null ? 0.0F : this.renderer.seatFacingYaw(wind);
+    }
+
+    public MahjongRule configuredRuleSnapshot() {
+        return copyRule(this.configuredRule);
+    }
+
+    public boolean addPlayer(Player player) {
+        for (SeatWind wind : SeatWind.values()) {
+            if (this.playerAt(wind) == null) {
+                return this.addPlayer(player, wind);
+            }
+        }
+        return false;
+    }
+
+    public boolean addPlayer(Player player, SeatWind wind) {
+        UUID playerId = player.getUniqueId();
+        if (wind == null || this.seats.contains(playerId) || this.playerAt(wind) != null) {
+            return false;
+        }
+        if (this.size() >= 4) {
+            return false;
+        }
+        this.spectators.remove(player.getUniqueId());
+        this.seats.set(wind.index(), playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
+        this.readyPlayers.remove(playerId);
+        return true;
+    }
+
+    public boolean addSpectator(Player player) {
+        UUID playerId = player.getUniqueId();
+        if (!this.currentRule().getSpectate() || this.seats.contains(playerId) || this.spectators.contains(playerId)) {
+            return false;
+        }
+        this.spectators.add(playerId);
+        return true;
+    }
+
+    public boolean removeSpectator(UUID playerId) {
+        this.viewerPresentation.hideHud(playerId);
+        return this.spectators.remove(playerId);
+    }
+
+    public boolean addBot() {
+        if (this.isStarted() || this.size() >= 4) {
+            return false;
+        }
+        UUID botId;
+        do {
+            botId = UUID.nameUUIDFromBytes((this.id + "-bot-" + this.nextBotNumber).getBytes(StandardCharsets.UTF_8));
+            this.nextBotNumber++;
+        } while (this.seats.contains(botId));
+        SeatWind emptySeat = this.firstEmptySeat();
+        if (emptySeat == null) {
+            return false;
+        }
+        this.seats.set(emptySeat.index(), botId);
+        this.botNames.put(botId, "Bot-" + this.botNames.size());
+        this.readyPlayers.add(botId);
+        this.render();
+        this.maybeStartRoundIfReady();
+        return true;
+    }
+
+    public boolean removeBot() {
+        if (this.isStarted()) {
+            return false;
+        }
+        for (int i = this.seats.size() - 1; i >= 0; i--) {
+            UUID playerId = this.seats.get(i);
+            if (playerId != null && this.botNames.containsKey(playerId)) {
+                this.seats.set(i, null);
+                this.botNames.remove(playerId);
+                this.playerFeedbackCoordinator.clearPlayerState(playerId);
+                this.selectedHandTileIndices.remove(playerId);
+                this.readyPlayers.remove(playerId);
+                this.leaveAfterRoundPlayers.remove(playerId);
+                this.render();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean removePlayer(UUID playerId) {
+        if (this.engine != null && this.engine.getStarted()) {
+            return false;
+        }
+        this.viewerPresentation.hideHud(playerId);
+        this.playerFeedbackCoordinator.clearPlayerState(playerId);
+        this.botNames.remove(playerId);
+        this.selectedHandTileIndices.remove(playerId);
+        this.readyPlayers.remove(playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
+        int seatIndex = this.seats.indexOf(playerId);
+        if (seatIndex < 0) {
+            return false;
+        }
+        this.seats.set(seatIndex, null);
+        return true;
+    }
+
+    public boolean contains(UUID playerId) {
+        return this.seats.contains(playerId);
+    }
+
+    public boolean isEmpty() {
+        return this.size() == 0;
+    }
+
+    public int size() {
+        int occupied = 0;
+        for (UUID playerId : this.seats) {
+            if (playerId != null) {
+                occupied++;
+            }
+        }
+        return occupied;
+    }
+
+    public int botCount() {
+        return this.botNames.size();
+    }
+
+    public int spectatorCount() {
+        return this.spectators.size();
+    }
+
+    public List<UUID> players() {
+        return this.seats.stream().filter(Objects::nonNull).toList();
+    }
+
+    public Set<UUID> spectators() {
+        return Set.copyOf(this.spectators);
+    }
+
+    public UUID owner() {
+        for (UUID playerId : this.seats) {
+            if (playerId != null) {
+                return playerId;
+            }
+        }
+        return null;
+    }
+
+    public SeatWind seatOf(UUID playerId) {
+        if (playerId == null) {
+            return null;
+        }
+        for (SeatWind wind : SeatWind.values()) {
+            if (Objects.equals(this.playerAt(wind), playerId)) {
+                return wind;
+            }
+        }
+        return null;
+    }
+
+    public boolean isReady(UUID playerId) {
+        return playerId != null && (this.isBot(playerId) || this.readyPlayers.contains(playerId));
+    }
+
+    public int readyCount() {
+        int ready = 0;
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.isReady(playerId)) {
+                ready++;
+            }
+        }
+        return ready;
+    }
+
+    public boolean isQueuedToLeave(UUID playerId) {
+        return playerId != null && this.leaveAfterRoundPlayers.contains(playerId);
+    }
+
+    public ReadyResult toggleReady(UUID playerId) {
+        if (playerId == null || !this.contains(playerId) || this.isBot(playerId) || this.isStarted()) {
+            return ReadyResult.BLOCKED;
+        }
+
+        boolean nowReady;
+        if (this.readyPlayers.contains(playerId)) {
+            this.readyPlayers.remove(playerId);
+            nowReady = false;
+        } else {
+            this.readyPlayers.add(playerId);
+            nowReady = true;
+        }
+
+        if (nowReady && this.maybeStartRoundIfReady()) {
+            return ReadyResult.STARTED;
+        }
+
+        this.render();
+        return nowReady ? ReadyResult.READY : ReadyResult.UNREADY;
+    }
+
+    public boolean queueLeaveAfterRound(UUID playerId) {
+        if (playerId == null || !this.contains(playerId) || !this.isStarted()) {
+            return false;
+        }
+        this.leaveAfterRoundPlayers.add(playerId);
+        return true;
+    }
+
+    public void startRound() {
+        if (this.size() != 4) {
+            throw new IllegalStateException("A riichi table needs exactly 4 players");
+        }
+
+        for (SeatWind wind : SeatWind.values()) {
+            UUID playerId = this.playerAt(wind);
+            if (playerId == null || !this.isReady(playerId)) {
+                throw new IllegalStateException("All seated players must be ready");
+            }
+        }
+
+        this.cancelNextRoundCountdown();
+        if (this.engine == null || this.engine.getGameFinished()) {
+            List<RiichiPlayerState> players = new ArrayList<>(SeatWind.values().length);
+            for (SeatWind wind : SeatWind.values()) {
+                UUID playerId = this.playerAt(wind);
+                if (playerId == null) {
+                    throw new IllegalStateException("A riichi table needs exactly 4 occupied seats");
+                }
+                players.add(new RiichiPlayerState(this.displayName(playerId), playerId.toString(), !this.isBot(playerId)));
+            }
+            this.engine = new RiichiRoundEngine(players, this.copyRule());
+        }
+
+        this.engine.startRound();
+        this.selectedHandTileIndices.clear();
+        this.clearLastPublicDiscard();
+        this.playerFeedbackCoordinator.resetForRoundStart();
+        this.regionDisplayCoordinator.invalidateFingerprints();
+        this.stateSoundCoordinator.resetForRoundStart();
+        this.render();
+        if (this.plugin.tableManager() != null) {
+            this.plugin.tableManager().startSeatWatchdog(this, 60L);
+        }
+    }
+
+    public boolean discard(UUID playerId, int tileIndex) {
+        if (this.engine == null) {
+            return false;
+        }
+        doublemoon.mahjongcraft.paper.model.MahjongTile discardedTile = this.handTileAt(playerId, tileIndex);
+        boolean result = this.engine.discard(playerId.toString(), tileIndex);
+        if (result) {
+            this.selectedHandTileIndices.clear();
+            this.rememberPublicDiscard(playerId, discardedTile);
+        }
+        this.render();
+        return result;
+    }
+
+    public boolean declareRiichi(UUID playerId, int tileIndex) {
+        if (this.engine == null) {
+            return false;
+        }
+        doublemoon.mahjongcraft.paper.model.MahjongTile discardedTile = this.handTileAt(playerId, tileIndex);
+        boolean result = this.engine.declareRiichi(playerId.toString(), tileIndex);
+        if (result) {
+            this.selectedHandTileIndices.clear();
+            this.rememberPublicDiscard(playerId, discardedTile);
+        }
+        this.render();
+        return result;
+    }
+
+    public boolean declareTsumo(UUID playerId) {
+        if (this.engine == null) {
+            return false;
+        }
+        boolean result = this.engine.tryTsumo(playerId.toString());
+        if (result) {
+            this.selectedHandTileIndices.clear();
+        }
+        this.render();
+        return result;
+    }
+
+    public boolean declareKyuushuKyuuhai(UUID playerId) {
+        if (this.engine == null) {
+            return false;
+        }
+        boolean result = this.engine.declareKyuushuKyuuhai(playerId.toString());
+        if (result) {
+            this.selectedHandTileIndices.clear();
+        }
+        this.render();
+        return result;
+    }
+
+    public boolean react(UUID playerId, ReactionResponse response) {
+        if (this.engine == null) {
+            return false;
+        }
+        boolean result = this.engine.react(playerId.toString(), response);
+        if (result) {
+            this.selectedHandTileIndices.clear();
+            this.stateSoundCoordinator.playReactionSound(response);
+        }
+        this.render();
+        return result;
+    }
+
+    public boolean declareKan(UUID playerId, String tileName) {
+        if (this.engine == null) {
+            return false;
+        }
+        try {
+            doublemoon.mahjongcraft.paper.riichi.model.MahjongTile tile =
+                doublemoon.mahjongcraft.paper.riichi.model.MahjongTile.valueOf(tileName.toUpperCase(Locale.ROOT));
+            boolean result = this.engine.tryAnkanOrKakan(playerId.toString(), tile);
+            if (result) {
+                this.selectedHandTileIndices.clear();
+            }
+            this.render();
+            return result;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    public void render() {
+        this.renderCoordinator.render();
+    }
+
+    public void clearDisplays() {
+        this.renderCoordinator.clearDisplays();
+    }
+
+    void applyRenderPrecompute(RenderPrecomputeResult result) {
+        this.regionDisplayCoordinator.applyRenderPrecompute(result);
+        this.viewerPresentation.flushIfNeeded();
+    }
+
+    public void inspectRender(Player viewer) {
+        this.renderInspectCoordinator.inspectRender(viewer);
+    }
+
+    public void shutdown() {
+        this.lifecycleCoordinator.shutdown();
+    }
+
+    public void forceEndMatch() {
+        this.lifecycleCoordinator.forceEndMatch();
+    }
+
+    public void resetForServerStartup() {
+        this.lifecycleCoordinator.resetForServerStartup();
+    }
+
+    void cancelNextRoundCountdownForLifecycle() {
+        this.cancelNextRoundCountdown();
+    }
+
+    void shutdownRenderFlow() {
+        this.renderCoordinator.shutdown();
+    }
+
+    void shutdownViewerPresentation() {
+        this.viewerPresentation.shutdown();
+    }
+
+    void resetViewerPresentationForLifecycleChange() {
+        this.viewerPresentation.resetForLifecycleChange();
+    }
+
+    void clearFeedbackTracking() {
+        this.selectedHandTileIndices.clear();
+    }
+
+    void clearRoundTrackingState() {
+        this.clearLastPublicDiscard();
+        this.playerFeedbackCoordinator.resetState();
+        this.stateSoundCoordinator.reset();
+    }
+
+    void invalidateRenderFingerprints() {
+        this.regionDisplayCoordinator.invalidateFingerprints();
+    }
+
+    void clearReadyPlayersForLifecycle() {
+        this.readyPlayers.clear();
+    }
+
+    void clearLeaveQueueForLifecycle() {
+        this.leaveAfterRoundPlayers.clear();
+    }
+
+    void clearSpectatorsForLifecycle() {
+        this.spectators.clear();
+    }
+
+    void clearBotNamesForLifecycle() {
+        this.botNames.clear();
+    }
+
+    void clearSeatAssignmentsForLifecycle() {
+        Collections.fill(this.seats, null);
+    }
+
+    void clearEngineForLifecycle() {
+        this.engine = null;
+    }
+
+    void cancelNextRoundCountdownForFeedback() {
+        this.cancelNextRoundCountdown();
+    }
+
+    void resetBotCounterForLifecycle() {
+        this.nextBotNumber = 1;
+    }
+
+    void resetReadyStateForNextRoundForLifecycle() {
+        this.resetReadyStateForNextRound();
+    }
+
+    void resetReadyStateForNextRoundForFeedback() {
+        this.resetReadyStateForNextRound();
+    }
+
+    void promptPlayersToReadyForFeedback() {
+        this.promptPlayersToReady();
+    }
+
+    public SeatWind currentSeat() {
+        if (this.engine == null || !this.engine.getStarted()) {
+            return SeatWind.EAST;
+        }
+        return SeatWind.fromIndex(this.engine.getCurrentPlayerIndex());
+    }
+
+    public UUID playerAt(SeatWind wind) {
+        if (this.engine != null && !this.engine.getSeats().isEmpty()) {
+            return UUID.fromString(this.engine.getSeats().get(wind.index()).getUuid());
+        }
+        return this.seats.get(wind.index());
+    }
+
+    public String playerName(SeatWind wind) {
+        return this.displayName(this.playerAt(wind));
+    }
+
+    public String displayName(UUID playerId) {
+        return this.displayName(playerId, this.publicLocale());
+    }
+
+    public String displayName(UUID playerId, Locale locale) {
+        if (playerId == null) {
+            return this.plugin.messages().plain(locale, "common.empty");
+        }
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null) {
+            return player.getName();
+        }
+        if (this.botNames.containsKey(playerId)) {
+            return this.botDisplayName(playerId, locale);
+        }
+        if (this.engine != null) {
+            RiichiPlayerState seatPlayer = this.engine.seatPlayer(playerId.toString());
+            if (seatPlayer != null) {
+                return seatPlayer.getDisplayName();
+            }
+        }
+        return this.plugin.messages().plain(locale, "common.offline");
+    }
+
+    public boolean isBot(UUID playerId) {
+        return this.botNames.containsKey(playerId);
+    }
+
+    public int points(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        if (player != null) {
+            return player.getPoints();
+        }
+        return this.contains(playerId) ? this.configuredRule.getStartingPoints() : 0;
+    }
+
+    public boolean isRiichi(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        return player != null && (player.getRiichi() || player.getDoubleRiichi());
+    }
+
+    public int dicePoints() {
+        return this.engine == null ? 0 : this.engine.getDicePoints();
+    }
+
+    public int kanCount() {
+        return this.engine == null ? 0 : this.engine.getKanCount();
+    }
+
+    public int roundIndex() {
+        return this.engine == null ? 0 : this.engine.getRound().getRound();
+    }
+
+    public SeatWind openDoorSeat() {
+        if (this.engine == null) {
+            return SeatWind.EAST;
+        }
+        return SeatWind.fromIndex(Math.floorMod(this.dicePoints() - 1 + this.roundIndex(), SeatWind.values().length));
+    }
+
+    public int honbaCount() {
+        return this.engine == null ? 0 : this.engine.getRound().getHonba();
+    }
+
+    public SeatWind dealerSeat() {
+        return this.engine == null ? SeatWind.EAST : SeatWind.fromIndex(this.engine.getRound().getRound());
+    }
+
+    public String waitingSummary() {
+        return this.waitingSummary(this.publicLocale());
+    }
+
+    public String waitingSummary(Locale locale) {
+        return this.publicTextFactory.waitingSummary(locale);
+    }
+
+    public String waitingDisplaySummary() {
+        return this.waitingDisplaySummary(this.publicLocale());
+    }
+
+    public String waitingDisplaySummary(Locale locale) {
+        return this.publicTextFactory.waitingDisplaySummary(locale);
+    }
+
+    public String ruleDisplaySummary() {
+        return this.ruleDisplaySummary(this.publicLocale());
+    }
+
+    public String ruleDisplaySummary(Locale locale) {
+        return this.publicTextFactory.ruleDisplaySummary(locale);
+    }
+
+    public String ruleSummary() {
+        return this.ruleSummary(this.publicLocale());
+    }
+
+    public String ruleSummary(Locale locale) {
+        return this.publicTextFactory.ruleSummary(locale);
+    }
+
+    public boolean setRuleOption(String key, String rawValue) {
+        if (this.isStarted()) {
+            return false;
+        }
+        try {
+            switch (key.toLowerCase(Locale.ROOT)) {
+                case "preset", "mode" -> {
+                    if (!this.applyRulePreset(rawValue)) {
+                        return false;
+                    }
+                }
+                case "length" -> this.configuredRule.setLength(MahjongRule.GameLength.valueOf(rawValue.toUpperCase(Locale.ROOT)));
+                case "thinkingtime", "thinking" -> this.configuredRule.setThinkingTime(MahjongRule.ThinkingTime.valueOf(rawValue.toUpperCase(Locale.ROOT)));
+                case "minimumhan", "minhan" -> this.configuredRule.setMinimumHan(MahjongRule.MinimumHan.valueOf(rawValue.toUpperCase(Locale.ROOT)));
+                case "spectate" -> this.configuredRule.setSpectate(Boolean.parseBoolean(rawValue));
+                case "redfive" -> this.configuredRule.setRedFive(MahjongRule.RedFive.valueOf(rawValue.toUpperCase(Locale.ROOT)));
+                case "opentanyao" -> this.configuredRule.setOpenTanyao(Boolean.parseBoolean(rawValue));
+                case "localyaku" -> this.configuredRule.setLocalYaku(Boolean.parseBoolean(rawValue));
+                case "startingpoints", "startpoints" -> this.configuredRule.setStartingPoints(Integer.parseInt(rawValue));
+                case "minpointstowin", "goal" -> this.configuredRule.setMinPointsToWin(Integer.parseInt(rawValue));
+                default -> {
+                    return false;
+                }
+            }
+            this.render();
+            this.persistRoomMetadataIfNeeded();
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    public List<String> ruleKeys() {
+        return List.of("preset", "mode", "length", "thinkingTime", "minimumHan", "spectate", "redFive", "openTanyao", "localYaku", "startingPoints", "minPointsToWin");
+    }
+
+    public List<String> ruleValues(String key) {
+        return switch (key.toLowerCase(Locale.ROOT)) {
+            case "preset", "mode" -> List.of("MAJSOUL_TONPUU", "MAJSOUL_HANCHAN");
+            case "length" -> List.of("ONE_GAME", "EAST", "SOUTH", "TWO_WIND");
+            case "thinkingtime", "thinking" -> List.of("VERY_SHORT", "SHORT", "NORMAL", "LONG", "VERY_LONG");
+            case "minimumhan", "minhan" -> List.of("ONE", "TWO", "FOUR", "YAKUMAN");
+            case "redfive" -> List.of("NONE", "THREE", "FOUR");
+            case "spectate", "opentanyao", "localyaku" -> List.of("true", "false");
+            case "startingpoints", "startpoints" -> List.of("25000", "30000", "35000");
+            case "minpointstowin", "goal" -> List.of("30000", "35000", "40000");
+            default -> List.of();
+        };
+    }
+
+    public List<doublemoon.mahjongcraft.paper.model.MahjongTile> hand(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        if (player == null) {
+            return List.of();
+        }
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(player.getHands().size());
+        player.getHands().forEach(tile -> tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(tile.getMahjongTile().name())));
+        return tiles;
+    }
+
+    public List<doublemoon.mahjongcraft.paper.model.MahjongTile> discards(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        if (player == null) {
+            return List.of();
+        }
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(player.getDiscardedTilesForDisplay().size());
+        player.getDiscardedTilesForDisplay().forEach(tile -> tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(tile.getMahjongTile().name())));
+        return tiles;
+    }
+
+    public int riichiDiscardIndex(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        if (player == null || player.getRiichiSengenTile() == null) {
+            return -1;
+        }
+        int displayIndex = player.getDiscardedTilesForDisplay().indexOf(player.getRiichiSengenTile());
+        if (displayIndex >= 0) {
+            return displayIndex;
+        }
+
+        int declaredIndex = player.getDiscardedTiles().indexOf(player.getRiichiSengenTile());
+        if (declaredIndex < 0) {
+            return -1;
+        }
+
+        for (int i = declaredIndex + 1; i < player.getDiscardedTiles().size(); i++) {
+            int shiftedDisplayIndex = player.getDiscardedTilesForDisplay().indexOf(player.getDiscardedTiles().get(i));
+            if (shiftedDisplayIndex >= 0) {
+                return shiftedDisplayIndex;
+            }
+        }
+        return -1;
+    }
+
+    public List<doublemoon.mahjongcraft.paper.model.MahjongTile> remainingWall() {
+        if (this.engine == null) {
+            return List.of();
+        }
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(this.engine.getWall().size());
+        this.engine.getWall().forEach(tile -> tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.UNKNOWN));
+        return tiles;
+    }
+
+    public List<MeldView> fuuro(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        if (player == null) {
+            return List.of();
+        }
+        List<MeldView> melds = new ArrayList<>(player.getFuuroList().size());
+        player.getFuuroList().forEach(fuuro -> {
+            List<doublemoon.mahjongcraft.paper.riichi.model.TileInstance> orderedInstances = new ArrayList<>(fuuro.getTileInstances());
+            doublemoon.mahjongcraft.paper.riichi.model.TileInstance addedKanTile = null;
+            if ("KAKAN".equals(fuuro.getType().name()) && !orderedInstances.isEmpty()) {
+                addedKanTile = orderedInstances.remove(orderedInstances.size() - 1);
+            } else if (!"KAKAN".equals(fuuro.getType().name())) {
+                orderedInstances.sort((left, right) -> Integer.compare(right.getMahjongTile().getSortOrder(), left.getMahjongTile().getSortOrder()));
+            }
+
+            doublemoon.mahjongcraft.paper.riichi.model.TileInstance claimTile = fuuro.getClaimTile();
+            orderedInstances.remove(claimTile);
+            int claimTileIndex = switch (fuuro.getClaimTarget().name()) {
+                case "RIGHT" -> 0;
+                case "ACROSS" -> 1;
+                case "LEFT" -> orderedInstances.size();
+                default -> -1;
+            };
+            if (claimTileIndex >= 0) {
+                orderedInstances.add(Math.min(claimTileIndex, orderedInstances.size()), claimTile);
+            }
+
+            List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(orderedInstances.size());
+            List<Boolean> faceDownFlags = new ArrayList<>(orderedInstances.size());
+            boolean concealedKan = fuuro.isKan() && !fuuro.isOpen();
+            for (int i = 0; i < orderedInstances.size(); i++) {
+                tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(orderedInstances.get(i).getMahjongTile().name()));
+                faceDownFlags.add(concealedKan && (i == 0 || i == orderedInstances.size() - 1));
+            }
+            int claimYawOffset = switch (fuuro.getClaimTarget().name()) {
+                case "RIGHT", "ACROSS" -> 90;
+                case "LEFT" -> -90;
+                default -> 0;
+            };
+            doublemoon.mahjongcraft.paper.model.MahjongTile addedKanView = addedKanTile == null
+                ? null
+                : doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(addedKanTile.getMahjongTile().name());
+            melds.add(new MeldView(List.copyOf(tiles), List.copyOf(faceDownFlags), claimTileIndex, claimYawOffset, addedKanView));
+        });
+        return List.copyOf(melds);
+    }
+
+    public List<ScoringStick> scoringSticks(UUID playerId) {
+        RiichiPlayerState player = this.engine == null ? null : this.engine.seatPlayer(playerId.toString());
+        return player == null ? List.of() : List.copyOf(player.getSticks());
+    }
+
+    public List<ScoringStick> cornerSticks(SeatWind wind) {
+        List<ScoringStick> sticks = new ArrayList<>();
+        if (this.dealerSeat() == wind) {
+            for (int i = 0; i < this.honbaCount(); i++) {
+                sticks.add(ScoringStick.P100);
+            }
+        }
+        return List.copyOf(sticks);
+    }
+
+    public int stickLayoutCount(SeatWind wind) {
+        UUID playerId = this.playerAt(wind);
+        int total = playerId == null ? 0 : this.scoringSticks(playerId).size();
+        if (this.dealerSeat() == wind) {
+            total += this.honbaCount();
+        }
+        return total;
+    }
+
+    public Player onlinePlayer(UUID playerId) {
+        return Bukkit.getPlayer(playerId);
+    }
+
+    public boolean isSpectator(UUID playerId) {
+        return this.spectators.contains(playerId);
+    }
+
+    public List<Player> viewers() {
+        List<Player> viewers = new ArrayList<>(this.seats.size() + this.spectators.size());
+        this.appendOnlineViewers(viewers);
+        return viewers;
+    }
+
+    public List<UUID> viewerIdsExcluding(UUID excludedPlayerId) {
+        List<UUID> viewerIds = new ArrayList<>(this.seats.size() + this.spectators.size());
+        this.appendOnlineViewerIds(viewerIds, excludedPlayerId);
+        return List.copyOf(viewerIds);
+    }
+
+    public String roundDisplay() {
+        return this.roundDisplay(this.publicLocale());
+    }
+
+    public String roundDisplay(Locale locale) {
+        return this.publicTextFactory.roundDisplay(locale);
+    }
+
+    public String dealerName() {
+        return this.dealerName(this.publicLocale());
+    }
+
+    public String dealerName(Locale locale) {
+        return this.publicTextFactory.dealerName(locale);
+    }
+
+    public List<doublemoon.mahjongcraft.paper.model.MahjongTile> doraIndicators() {
+        if (this.engine == null) {
+            return List.of();
+        }
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(this.engine.getDoraIndicators().size());
+        this.engine.getDoraIndicators().forEach(tile -> tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(tile.getMahjongTile().name())));
+        return tiles;
+    }
+
+    public List<doublemoon.mahjongcraft.paper.model.MahjongTile> uraDoraIndicators() {
+        if (this.engine == null) {
+            return List.of();
+        }
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> tiles = new ArrayList<>(this.engine.getUraDoraIndicators().size());
+        this.engine.getUraDoraIndicators().forEach(tile -> tiles.add(doublemoon.mahjongcraft.paper.model.MahjongTile.valueOf(tile.getMahjongTile().name())));
+        return tiles;
+    }
+
+    public doublemoon.mahjongcraft.paper.riichi.RoundResolution lastResolution() {
+        return this.engine == null ? null : this.engine.getLastResolution();
+    }
+
+    public boolean openSettlementUi(Player player) {
+        if (this.lastResolution() == null) {
+            return false;
+        }
+        SettlementUi.open(player, this);
+        return true;
+    }
+
+    public Component stateSummary(Player player) {
+        return this.viewerSnapshotFactory.createStateSummary(player);
+    }
+
+    public Component viewerOverlay(Player viewer) {
+        return this.viewerSnapshotFactory.createViewerOverlay(viewer);
+    }
+
+    public Component spectatorSeatOverlay(Player viewer, SeatWind wind) {
+        return this.spectatorSeatOverlay(this.plugin.messages().resolveLocale(viewer), wind);
+    }
+
+    private Component spectatorSeatOverlay(Locale locale, SeatWind wind) {
+        UUID playerId = this.playerAt(wind);
+        if (playerId == null) {
+            return this.plugin.messages().render(
+                locale,
+                "overlay.seat_empty",
+                this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale))
+            );
+        }
+
+        return this.plugin.messages().render(
+            locale,
+            "overlay.seat",
+            this.plugin.messages().tag("seat", this.seatDisplayName(wind, locale)),
+            this.plugin.messages().tag("name", this.displayName(playerId, locale)),
+            this.plugin.messages().number(locale, "points", this.points(playerId)),
+            this.plugin.messages().number(locale, "hand", this.hand(playerId).size()),
+            this.plugin.messages().number(locale, "river", this.discards(playerId).size()),
+            this.plugin.messages().number(locale, "melds", this.fuuro(playerId).size()),
+            this.plugin.messages().tag("status", this.spectatorSeatStatus(locale, wind, playerId))
+        );
+    }
+
+    private String spectatorSeatStatus(Locale locale, SeatWind wind, UUID playerId) {
+        String status = "";
+        if (this.currentSeat() == wind && this.isStarted()) {
+            status = this.plugin.messages().plain(locale, "overlay.status_turn");
+        }
+        if (!this.isRiichi(playerId)) {
+            return status;
+        }
+        String riichi = this.plugin.messages().plain(locale, "overlay.status_riichi");
+        return status.isBlank() ? riichi : status + " / " + riichi;
+    }
+
+    public boolean isStarted() {
+        return this.engine != null && this.engine.getStarted();
+    }
+
+    public RiichiRoundEngine engine() {
+        return this.engine;
+    }
+
+    void setBotTask(BukkitTask botTask) {
+        this.botTask = botTask;
+    }
+
+    void cancelBotTask() {
+        if (this.botTask != null) {
+            this.botTask.cancel();
+            this.botTask = null;
+        }
+    }
+
+    public void tick() {
+        this.renderCoordinator.restoreDisplaysIfNeeded();
+        if (this.viewerPresentation.hasPresentationState()) {
+            this.viewerPresentation.markDirty();
+            this.viewerPresentation.flushIfNeeded();
+        }
+        if (this.engine == null || this.engine.getStarted() || this.engine.getLastResolution() == null) {
+            return;
+        }
+        this.processDeferredLeaves();
+    }
+
+    private MahjongRule currentRule() {
+        return this.engine == null ? this.configuredRule : this.engine.getRule();
+    }
+
+    public boolean applyRulePreset(String rawValue) {
+        switch (rawValue.toUpperCase(Locale.ROOT)) {
+            case "MAJSOUL_TONPUU", "TONPUU", "TONPUSEN", "EAST" -> this.configuredRule = majsoulRule(MahjongRule.GameLength.EAST);
+            case "MAJSOUL_HANCHAN", "HANCHAN", "TWO_WIND", "SOUTH" -> this.configuredRule = majsoulRule(MahjongRule.GameLength.TWO_WIND);
+            default -> {
+                return false;
+            }
+        }
+        this.persistRoomMetadataIfNeeded();
+        return true;
+    }
+
+    public boolean clickHandTile(UUID playerId, int tileIndex, boolean cancelSelection) {
+        if (!this.canSelectHandTile(playerId, tileIndex)) {
+            return false;
+        }
+        Integer selectedIndex = this.selectedHandTileIndices.get(playerId);
+        if (selectedIndex != null && selectedIndex == tileIndex) {
+            if (cancelSelection) {
+                this.selectedHandTileIndices.remove(playerId);
+                this.refreshSelectedHandTileView(playerId);
+                return true;
+            }
+            return this.discard(playerId, tileIndex);
+        }
+        this.selectedHandTileIndices.put(playerId, tileIndex);
+        this.refreshSelectedHandTileView(playerId);
+        return true;
+    }
+
+    public int selectedHandTileIndex(UUID playerId) {
+        return this.selectedHandTileIndices.getOrDefault(playerId, -1);
+    }
+
+    private void pruneSelectedHandTiles() {
+        this.selectedHandTileIndices.entrySet().removeIf(entry -> !this.isValidSelectedHandTile(entry.getKey(), entry.getValue()));
+    }
+
+    private boolean isValidSelectedHandTile(UUID playerId, int tileIndex) {
+        return this.canSelectHandTile(playerId, tileIndex);
+    }
+
+    private boolean canSelectHandTile(UUID playerId, int tileIndex) {
+        if (!this.contains(playerId) || tileIndex < 0 || this.engine == null) {
+            return false;
+        }
+        RiichiPlayerState player = this.engine.seatPlayer(playerId.toString());
+        if (player == null || tileIndex >= player.getHands().size()) {
+            return false;
+        }
+        if (!this.engine.getStarted() || this.engine.getPendingReaction() != null) {
+            return false;
+        }
+        return this.engine.getCurrentPlayer().getUuid().equals(playerId.toString());
+    }
+
+    private void refreshSelectedHandTileView(UUID playerId) {
+        SeatWind wind = this.seatOf(playerId);
+        if (wind == null) {
+            return;
+        }
+        RenderSnapshot snapshot = this.captureRenderSnapshot(0L, 0L);
+        SeatRenderSnapshot seat = snapshot.seat(wind);
+        if (seat == null || seat.playerId() == null) {
+            return;
+        }
+        TableRenderLayout.LayoutPlan plan = TableRenderLayout.precompute(snapshot);
+        TableRenderLayout.SeatLayoutPlan seatPlan = plan.seat(wind);
+        if (seatPlan == null) {
+            return;
+        }
+        this.regionDisplayCoordinator.refreshPrivateHandRegions(seat, seatPlan);
+    }
+
+    private doublemoon.mahjongcraft.paper.model.MahjongTile handTileAt(UUID playerId, int tileIndex) {
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> hand = this.hand(playerId);
+        if (tileIndex < 0 || tileIndex >= hand.size()) {
+            return null;
+        }
+        return hand.get(tileIndex);
+    }
+
+    private void rememberPublicDiscard(UUID playerId, doublemoon.mahjongcraft.paper.model.MahjongTile discardedTile) {
+        if (discardedTile == null) {
+            return;
+        }
+        this.lastPublicDiscardPlayerId = playerId;
+        this.lastPublicDiscardTile = discardedTile;
+    }
+
+    private void clearLastPublicDiscard() {
+        this.lastPublicDiscardPlayerId = null;
+        this.lastPublicDiscardTile = null;
+    }
+
+    private void persistRoomMetadataIfNeeded() {
+        if (this.persistentRoom && this.plugin.tableManager() != null) {
+            this.plugin.tableManager().persistTables();
+        }
+    }
+
+    private MahjongRule copyRule() {
+        return copyRule(this.configuredRule);
+    }
+
+    private static MahjongRule copyRule(MahjongRule rule) {
+        return new MahjongRule(
+            rule.getLength(),
+            rule.getThinkingTime(),
+            rule.getStartingPoints(),
+            rule.getMinPointsToWin(),
+            rule.getMinimumHan(),
+            rule.getSpectate(),
+            rule.getRedFive(),
+            rule.getOpenTanyao(),
+            rule.getLocalYaku()
+        );
+    }
+
+    public List<FinalStanding> finalStandings() {
+        if (this.engine == null || !this.engine.getGameFinished()) {
+            return List.of();
+        }
+        List<RiichiPlayerState> seatOrder = this.engine.getSeats();
+        List<RiichiPlayerState> ranked = new ArrayList<>(seatOrder);
+        ranked.sort((left, right) -> {
+            int scoreCompare = Integer.compare(right.getPoints(), left.getPoints());
+            if (scoreCompare != 0) {
+                return scoreCompare;
+            }
+            return Integer.compare(seatOrder.indexOf(left), seatOrder.indexOf(right));
+        });
+
+        List<FinalStanding> standings = new ArrayList<>(ranked.size());
+        for (int i = 0; i < ranked.size(); i++) {
+            RiichiPlayerState player = ranked.get(i);
+            double gameScore = MahjongSoulScoring.gameScore(player.getPoints(), i + 1);
+            UUID playerId = UUID.fromString(player.getUuid());
+            standings.add(new FinalStanding(playerId, player.getDisplayName(), i + 1, player.getPoints(), gameScore, this.isBot(playerId)));
+        }
+        return List.copyOf(standings);
+    }
+
+    ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
+        return this.viewerSnapshotFactory.captureViewerOverlaySnapshot(viewer);
+    }
+
+    ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
+        return this.viewerSnapshotFactory.captureViewerHudSnapshot(locale, viewerId);
+    }
+
+    void updateViewerOverlayRegion(ViewerOverlaySnapshot snapshot) {
+        this.regionDisplayCoordinator.updateViewerOverlayRegion(snapshot);
+    }
+
+    List<String> viewerOverlayRegionKeys() {
+        return this.regionDisplayCoordinator.regionKeys();
+    }
+
+    void removeManagedRegionDisplays(String regionKey) {
+        this.regionDisplayCoordinator.removeManagedRegionDisplays(regionKey);
+    }
+
+    List<UUID> seatIds() {
+        return this.seats;
+    }
+
+    String viewerMembershipSignatureFor(UUID excludedPlayerId) {
+        StringBuilder builder = new StringBuilder(96);
+        this.appendOnlineViewerIds(builder, excludedPlayerId);
+        return builder.toString();
+    }
+
+    private void appendOnlineViewers(List<Player> target) {
+        this.appendOnlineSeatViewers(target);
+        this.appendOnlineSpectators(target);
+    }
+
+    private void appendOnlineViewerIds(List<UUID> target, UUID excludedPlayerId) {
+        this.appendOnlineSeatViewerIds(target, excludedPlayerId);
+        this.appendOnlineSpectatorIds(target, excludedPlayerId);
+    }
+
+    private void appendOnlineViewerIds(StringBuilder target, UUID excludedPlayerId) {
+        this.appendOnlineSeatViewerIds(target, excludedPlayerId);
+        this.appendOnlineSpectatorIds(target, excludedPlayerId);
+    }
+
+    private void appendOnlineSeatViewers(List<Player> target) {
+        for (UUID playerId : this.seats) {
+            if (playerId == null) {
+                continue;
+            }
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                target.add(player);
+            }
+        }
+    }
+
+    private void appendOnlineSpectators(List<Player> target) {
+        for (UUID spectatorId : this.spectators) {
+            Player player = Bukkit.getPlayer(spectatorId);
+            if (player != null) {
+                target.add(player);
+            }
+        }
+    }
+
+    private void appendOnlineSeatViewerIds(List<UUID> target, UUID excludedPlayerId) {
+        for (UUID playerId : this.seats) {
+            if (playerId == null) {
+                continue;
+            }
+            if (!playerId.equals(excludedPlayerId) && Bukkit.getPlayer(playerId) != null) {
+                target.add(playerId);
+            }
+        }
+    }
+
+    private void appendOnlineSpectatorIds(List<UUID> target, UUID excludedPlayerId) {
+        for (UUID spectatorId : this.spectators) {
+            if (!spectatorId.equals(excludedPlayerId) && Bukkit.getPlayer(spectatorId) != null) {
+                target.add(spectatorId);
+            }
+        }
+    }
+
+    private void appendOnlineSeatViewerIds(StringBuilder target, UUID excludedPlayerId) {
+        for (UUID playerId : this.seats) {
+            if (playerId == null) {
+                continue;
+            }
+            if (!playerId.equals(excludedPlayerId) && Bukkit.getPlayer(playerId) != null) {
+                target.append(playerId).append(';');
+            }
+        }
+    }
+
+    private void appendOnlineSpectatorIds(StringBuilder target, UUID excludedPlayerId) {
+        for (UUID spectatorId : this.spectators) {
+            if (!spectatorId.equals(excludedPlayerId) && Bukkit.getPlayer(spectatorId) != null) {
+                target.append(spectatorId).append(';');
+            }
+        }
+    }
+
+    String riichiFingerprintValue() {
+        FingerprintBuilder builder = fingerprintBuilder(64);
+        for (UUID playerId : this.seats) {
+            if (playerId == null) {
+                continue;
+            }
+            builder.field(playerId).field(this.isRiichi(playerId)).entrySeparator();
+        }
+        return builder.toString();
+    }
+
+    private void scheduleNextRoundCountdown() {
+        this.nextRoundDeadlineMillis = System.currentTimeMillis() + NEXT_ROUND_DELAY_MILLIS;
+    }
+
+    private void cancelNextRoundCountdown() {
+        this.nextRoundDeadlineMillis = 0L;
+    }
+
+    private long nextRoundSecondsRemaining() {
+        if (this.nextRoundDeadlineMillis <= 0L) {
+            return 0L;
+        }
+        return Math.max(0L, (long) Math.ceil((this.nextRoundDeadlineMillis - System.currentTimeMillis()) / 1000.0D));
+    }
+
+    long nextRoundSecondsRemainingValue() {
+        return this.nextRoundSecondsRemaining();
+    }
+
+    void prepareRenderRequest() {
+        this.cancelBotTask();
+        this.pruneSelectedHandTiles();
+        this.viewerPresentation.markDirty();
+    }
+
+    void completeRenderFlush() {
+        this.playerFeedbackCoordinator.sync();
+        this.viewerPresentation.flushIfNeeded();
+        this.stateSoundCoordinator.syncStateSounds();
+        BotActionScheduler.schedule(this);
+    }
+
+    RenderSnapshot captureRenderSnapshot(long version, long cancellationNonce) {
+        return this.renderSnapshotFactory.create(this, version, cancellationNonce);
+    }
+
+    RenderPrecomputeResult precomputeRender(RenderSnapshot snapshot) {
+        return new RenderPrecomputeResult(
+            snapshot,
+            this.regionFingerprintService.precomputeRegionFingerprints(this, snapshot),
+            TableRenderLayout.precompute(snapshot)
+        );
+    }
+
+    public boolean isCenteredInChunk(Chunk chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        World world = this.center.getWorld();
+        return world != null
+            && world.equals(chunk.getWorld())
+            && Math.floorDiv(this.center.getBlockX(), 16) == chunk.getX()
+            && Math.floorDiv(this.center.getBlockZ(), 16) == chunk.getZ();
+    }
+
+    void clearRenderDisplays() {
+        this.regionDisplayCoordinator.clearRenderDisplays();
+    }
+
+    boolean hasRegionDisplays() {
+        return this.regionDisplayCoordinator.hasRegionDisplays();
+    }
+
+    boolean isCenterChunkLoaded() {
+        World world = this.center.getWorld();
+        return world != null
+            && world.isChunkLoaded(Math.floorDiv(this.center.getBlockX(), 16), Math.floorDiv(this.center.getBlockZ(), 16));
+    }
+
+    boolean hasStaleDisplayRegions() {
+        return this.regionDisplayCoordinator.hasStaleDisplayRegions();
+    }
+
+    private static FingerprintBuilder fingerprintBuilder(int capacity) {
+        return new FingerprintBuilder(capacity);
+    }
+
+    public record RenderSnapshot(
+        long version,
+        long cancellationNonce,
+        String worldName,
+        double centerX,
+        double centerY,
+        double centerZ,
+        boolean started,
+        boolean gameFinished,
+        int remainingWallCount,
+        int kanCount,
+        int dicePoints,
+        int roundIndex,
+        int honbaCount,
+        SeatWind dealerSeat,
+        SeatWind currentSeat,
+        SeatWind openDoorSeat,
+        String waitingDisplaySummary,
+        String ruleDisplaySummary,
+        String publicCenterText,
+        UUID lastPublicDiscardPlayerId,
+        doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile,
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> doraIndicators,
+        EnumMap<SeatWind, SeatRenderSnapshot> seats
+    ) {
+        public SeatRenderSnapshot seat(SeatWind wind) {
+            return this.seats.get(wind);
+        }
+    }
+
+    public record SeatRenderSnapshot(
+        SeatWind wind,
+        UUID playerId,
+        String displayName,
+        String publicSeatStatus,
+        int points,
+        boolean riichi,
+        boolean ready,
+        boolean queuedToLeave,
+        boolean online,
+        String viewerMembershipSignature,
+        int selectedHandTileIndex,
+        int riichiDiscardIndex,
+        int stickLayoutCount,
+        List<UUID> viewerIdsExcluding,
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> hand,
+        List<doublemoon.mahjongcraft.paper.model.MahjongTile> discards,
+        List<MeldView> melds,
+        List<ScoringStick> scoringSticks,
+        List<ScoringStick> cornerSticks
+    ) {
+    }
+
+    public record ViewerOverlaySnapshot(
+        UUID viewerId,
+        String regionKey,
+        boolean spectator,
+        Component overlay,
+        List<SpectatorSeatOverlaySnapshot> spectatorSeatOverlays,
+        String fingerprint
+    ) {
+    }
+
+    public record SpectatorSeatOverlaySnapshot(
+        SeatWind wind,
+        Component overlay,
+        String signature
+    ) {
+    }
+
+    record ViewerHudSnapshot(
+        Component title,
+        float progress,
+        BossBar.Color color,
+        String stateSignature
+    ) {
+    }
+
+    record RenderPrecomputeResult(
+        RenderSnapshot snapshot,
+        Map<String, String> regionFingerprints,
+        TableRenderLayout.LayoutPlan layout
+    ) {
+    }
+
+    private static final class FingerprintBuilder {
+        private final StringBuilder delegate;
+        private boolean needsSeparator;
+
+        private FingerprintBuilder(int capacity) {
+            this.delegate = new StringBuilder(capacity);
+        }
+
+        private FingerprintBuilder field(Object value) {
+            if (this.needsSeparator) {
+                this.delegate.append(':');
+            }
+            this.delegate.append(Objects.toString(value, ""));
+            this.needsSeparator = true;
+            return this;
+        }
+
+        private FingerprintBuilder raw(Object value) {
+            this.delegate.append(value);
+            return this;
+        }
+
+        private FingerprintBuilder entrySeparator() {
+            this.delegate.append(';');
+            this.needsSeparator = false;
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return this.delegate.toString();
+        }
+    }
+
+    public Locale publicLocale() {
+        return LocalizedMessages.DEFAULT_LOCALE;
+    }
+
+    TableRenderer renderer() {
+        return this.renderer;
+    }
+
+    public String seatDisplayName(SeatWind wind, Locale locale) {
+        return this.publicTextFactory.seatDisplayName(wind, locale);
+    }
+
+    public String publicSeatStatus(SeatWind wind) {
+        return this.publicTextFactory.publicSeatStatus(wind);
+    }
+
+    public String publicCenterText() {
+        return this.publicTextFactory.publicCenterText();
+    }
+
+    public doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile() {
+        return this.lastPublicDiscardTile;
+    }
+
+    public UUID lastPublicDiscardPlayerId() {
+        return this.lastPublicDiscardPlayerId;
+    }
+
+    UUID lastPublicDiscardPlayerIdValue() {
+        return this.lastPublicDiscardPlayerId;
+    }
+
+    private String botDisplayName(UUID playerId, Locale locale) {
+        String raw = this.botNames.get(playerId);
+        if (raw == null) {
+            return this.plugin.messages().plain(locale, "common.unknown");
+        }
+        int suffix = this.seats.indexOf(playerId) + 1;
+        return this.plugin.messages().plain(locale, "table.bot_name", this.plugin.messages().number(locale, "index", Math.max(1, suffix)));
+    }
+
+    String tileLabelForDisplay(Locale locale, String tileName) {
+        String key = "tile." + tileName.toLowerCase(Locale.ROOT);
+        return this.plugin.messages().contains(locale, key) ? this.plugin.messages().plain(locale, key) : tileName.toLowerCase(Locale.ROOT);
+    }
+
+    private void resetReadyStateForNextRound() {
+        this.readyPlayers.clear();
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.isBot(playerId)) {
+                this.readyPlayers.add(playerId);
+            }
+        }
+    }
+
+    private void promptPlayersToReady() {
+        for (UUID playerId : this.seats) {
+            if (playerId == null || this.isBot(playerId) || this.isQueuedToLeave(playerId)) {
+                continue;
+            }
+            Player player = Bukkit.getPlayer(playerId);
+            if (player == null) {
+                continue;
+            }
+            this.plugin.messages().send(player, "command.ready_prompt");
+        }
+    }
+
+    private boolean maybeStartRoundIfReady() {
+        if (this.isStarted() || this.size() != 4) {
+            return false;
+        }
+        for (SeatWind wind : SeatWind.values()) {
+            UUID playerId = this.playerAt(wind);
+            if (playerId == null || !this.isReady(playerId)) {
+                return false;
+            }
+        }
+        this.startRound();
+        this.stateSoundCoordinator.playRoundStartSound();
+        return true;
+    }
+
+    private void processDeferredLeaves() {
+        if (this.leaveAfterRoundPlayers.isEmpty() || this.isStarted()) {
+            return;
+        }
+        List<UUID> removed = new ArrayList<>();
+        for (UUID playerId : List.copyOf(this.leaveAfterRoundPlayers)) {
+            if (this.removePlayer(playerId)) {
+                removed.add(playerId);
+            }
+        }
+        if (removed.isEmpty()) {
+            return;
+        }
+        this.leaveAfterRoundPlayers.removeAll(removed);
+        if (this.plugin.tableManager() != null) {
+            this.plugin.tableManager().finalizeDeferredLeaves(this, removed);
+        }
+    }
+
+    private static MahjongRule majsoulRule(MahjongRule.GameLength length) {
+        return new MahjongRule(
+            length,
+            MahjongRule.ThinkingTime.NORMAL,
+            25000,
+            30000,
+            MahjongRule.MinimumHan.ONE,
+            true,
+            MahjongRule.RedFive.THREE,
+            true,
+            false
+        );
+    }
+
+    private static Location normalizedTableCenter(Location source) {
+        Location normalized = source.clone();
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
+    }
+
+    private SeatWind firstEmptySeat() {
+        for (SeatWind wind : SeatWind.values()) {
+            if (this.playerAt(wind) == null) {
+                return wind;
+            }
+        }
+        return null;
+    }
+
+    public static final class FinalStanding {
+        private final UUID playerId;
+        private final String displayName;
+        private final int place;
+        private final int points;
+        private final double gameScore;
+        private final boolean bot;
+
+        public FinalStanding(UUID playerId, String displayName, int place, int points, double gameScore, boolean bot) {
+            this.playerId = playerId;
+            this.displayName = displayName;
+            this.place = place;
+            this.points = points;
+            this.gameScore = gameScore;
+            this.bot = bot;
+        }
+
+        public UUID playerId() {
+            return this.playerId;
+        }
+
+        public String displayName() {
+            return this.displayName;
+        }
+
+        public int place() {
+            return this.place;
+        }
+
+        public int points() {
+            return this.points;
+        }
+
+        public double gameScore() {
+            return this.gameScore;
+        }
+
+        public boolean bot() {
+            return this.bot;
+        }
+    }
+
+    public enum ReadyResult {
+        READY,
+        UNREADY,
+        STARTED,
+        BLOCKED
+    }
+}

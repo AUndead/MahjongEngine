@@ -1,10 +1,10 @@
 package doublemoon.mahjongcraft.paper.table;
 
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.model.SeatWind;
-import doublemoon.mahjongcraft.paper.render.DisplayClickAction;
-import doublemoon.mahjongcraft.paper.render.DisplayClickAction.ActionType;
-import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction;
+import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction.ActionType;
+import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;

@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.layout;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 

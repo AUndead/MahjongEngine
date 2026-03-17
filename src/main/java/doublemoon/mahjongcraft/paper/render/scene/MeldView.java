@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.scene;
 
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import java.util.List;

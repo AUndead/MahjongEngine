@@ -1,11 +1,11 @@
 package doublemoon.mahjongcraft.paper.compat;
 
-import doublemoon.mahjongcraft.paper.ConfigAccess;
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.config.ConfigAccess;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
-import doublemoon.mahjongcraft.paper.render.DisplayClickAction;
-import doublemoon.mahjongcraft.paper.render.DisplayVisibilityRegistry;
-import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction;
+import doublemoon.mahjongcraft.paper.render.display.DisplayVisibilityRegistry;
+import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
 import java.io.IOException;
 import java.io.InputStream;

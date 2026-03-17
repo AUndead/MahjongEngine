@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.display;
 
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import net.kyori.adventure.text.Component;
@@ -597,7 +597,7 @@ public final class DisplayEntities {
     }
 
     private static void registerForCraftEngineCulling(Plugin plugin, org.bukkit.entity.Entity entity) {
-        if (plugin instanceof doublemoon.mahjongcraft.paper.MahjongPaperPlugin mahjongPlugin && mahjongPlugin.craftEngine() != null) {
+        if (plugin instanceof doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin mahjongPlugin && mahjongPlugin.craftEngine() != null) {
             mahjongPlugin.craftEngine().registerCullableEntity(entity);
         }
     }
@@ -618,7 +618,7 @@ public final class DisplayEntities {
     }
 
     private static ItemStack tileItem(Plugin plugin, MahjongTile tile, boolean faceDown) {
-        if (plugin instanceof doublemoon.mahjongcraft.paper.MahjongPaperPlugin mahjongPlugin) {
+        if (plugin instanceof doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin mahjongPlugin) {
             ItemStack customItem = mahjongPlugin.craftEngine().resolveTileItem(tile, faceDown);
             if (customItem != null) {
                 return customItem;

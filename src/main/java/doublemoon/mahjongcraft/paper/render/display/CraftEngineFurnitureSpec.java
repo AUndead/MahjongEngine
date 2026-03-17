@@ -1,6 +1,6 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.display;
 
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;

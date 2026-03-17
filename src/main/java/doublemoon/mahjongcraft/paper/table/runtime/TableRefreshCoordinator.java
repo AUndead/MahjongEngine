@@ -1,6 +1,6 @@
 package doublemoon.mahjongcraft.paper.table;
 
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;

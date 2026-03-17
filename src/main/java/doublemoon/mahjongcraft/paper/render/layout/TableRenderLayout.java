@@ -1,7 +1,9 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.layout;
 
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.model.SeatWind;
+import doublemoon.mahjongcraft.paper.render.display.DisplayEntities;
+import doublemoon.mahjongcraft.paper.render.scene.MeldView;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
 import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
 import java.util.ArrayList;

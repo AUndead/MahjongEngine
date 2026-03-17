@@ -1,6 +1,6 @@
 package doublemoon.mahjongcraft.paper.debug;
 
-import doublemoon.mahjongcraft.paper.ConfigAccess;
+import doublemoon.mahjongcraft.paper.config.ConfigAccess;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;

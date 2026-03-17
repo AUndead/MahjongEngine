@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper;
+package doublemoon.mahjongcraft.paper.bootstrap;
 
 import io.papermc.paper.plugin.loader.PluginClasspathBuilder;
 import io.papermc.paper.plugin.loader.PluginLoader;

@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper;
+package doublemoon.mahjongcraft.paper.config;
 
 import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;

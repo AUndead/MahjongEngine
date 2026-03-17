@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper;
+package doublemoon.mahjongcraft.paper.runtime;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;

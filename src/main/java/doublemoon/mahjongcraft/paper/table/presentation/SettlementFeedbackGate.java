@@ -1,12 +1,12 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.presentation;
 
 import java.util.Objects;
 
-final class SettlementFeedbackGate {
+public final class SettlementFeedbackGate {
     private SettlementFeedbackGate() {
     }
 
-    static boolean isNewSettlement(String settlementFingerprint, String lastSettlementFingerprint) {
+    public static boolean isNewSettlement(String settlementFingerprint, String lastSettlementFingerprint) {
         return !Objects.toString(settlementFingerprint, "").isBlank()
             && !Objects.equals(settlementFingerprint, lastSettlementFingerprint);
     }

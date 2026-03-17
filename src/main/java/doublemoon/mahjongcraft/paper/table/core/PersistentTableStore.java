@@ -1,6 +1,6 @@
 package doublemoon.mahjongcraft.paper.table;
 
-import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
 import java.io.File;
 import java.io.IOException;

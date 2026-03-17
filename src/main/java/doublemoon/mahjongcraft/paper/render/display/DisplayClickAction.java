@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.render;
+package doublemoon.mahjongcraft.paper.render.display;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import java.util.UUID;
