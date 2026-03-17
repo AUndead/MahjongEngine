@@ -1175,6 +1175,9 @@ public final class TableRenderer {
     }
 
     private List<Entity> renderTableHitboxes(MahjongTableSession session, Location tableCenter) {
+        if (configuredTableFurnitureId(session) != null) {
+            return List.of();
+        }
         Entity furnitureHitbox = session.plugin().craftEngine().placeTableHitbox(tableCenter.clone());
         return furnitureHitbox == null ? List.of() : List.of(furnitureHitbox);
     }

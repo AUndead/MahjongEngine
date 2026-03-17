@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-03-17
+
+CraftEngine table furniture behavior update.
+
+- Merged the built-in 3x3 table hitbox into `mahjongpaper:table_visual` so the default CraftEngine table is a single furniture entity.
+- Changed table furniture handling so when `tableFurnitureId` is configured, MahjongPaper uses that furniture as-is, including all of its own hitboxes and behavior.
+- Kept the fallback standalone table hitbox only for the built-in block-display table path when `tableFurnitureId` is left empty.
+
 ## 0.3.1 - 2026-03-17
 
 Stability and interaction fix release.

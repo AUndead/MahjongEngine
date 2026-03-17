@@ -30,21 +30,17 @@ class CraftEngineBundleTest {
     }
 
     @Test
-    fun `table hitbox stays centered 3x3 in craftengine bundle`() {
+    fun `table visual embeds centered 3x3 hitbox in craftengine bundle`() {
         val stream = javaClass.classLoader.getResourceAsStream("craftengine/mahjongpaper/configuration/items/mahjong_tiles.yml")
         assertNotNull(stream)
 
         val text = stream.bufferedReader().use { it.readText() }
-        assertContains(text, "mahjongpaper:table_hitbox:")
-        assertContains(text, "position: -1,-1,-1")
-        assertContains(text, "position: -1,-1,0")
-        assertContains(text, "position: -1,-1,1")
-        assertContains(text, "position: 0,-1,-1")
-        assertContains(text, "position: 0,-1,0")
-        assertContains(text, "position: 0,-1,1")
-        assertContains(text, "position: 1,-1,-1")
-        assertContains(text, "position: 1,-1,0")
-        assertContains(text, "position: 1,-1,1")
+        assertTrue(
+            Regex(
+                """mahjongpaper:table_visual:.*?hitboxes:\s+- position: -1,-1,-1.*?position: -1,-1,0.*?position: -1,-1,1.*?position: 0,-1,-1.*?position: 0,-1,0.*?position: 0,-1,1.*?position: 1,-1,-1.*?position: 1,-1,0.*?position: 1,-1,1""",
+                setOf(RegexOption.DOT_MATCHES_ALL)
+            ).containsMatchIn(text)
+        )
     }
 
     @Test

@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "doublemoon.mahjongcraft"
-version = "0.3.1"
+version = "0.3.2"
 
 val kotlinRuntimeVersion = "2.2.0"
 val kotlinSerializationVersion = "1.9.0"
@@ -199,6 +199,10 @@ fun writeCraftEngineBundle(enumSource: File, resourcepackDir: File, attributionF
         appendLine("        settings:")
         appendLine("          item: mahjongpaper:table_visual")
         appendLine("          hit-times: 1")
+        appendLine("          sounds:")
+        appendLine("            break: minecraft:block.wood.break")
+        appendLine("            place: minecraft:block.wood.place")
+        appendLine("            hit: minecraft:block.wood.hit")
         appendLine("        variants:")
         appendLine("          ground:")
         appendLine("            elements:")
@@ -209,6 +213,17 @@ fun writeCraftEngineBundle(enumSource: File, resourcepackDir: File, attributionF
         appendLine("                translation: 0,0,0")
         appendLine("                shadow-radius: 0")
         appendLine("                shadow-strength: 0")
+        appendLine("            hitboxes:")
+        listOf("-1,-1,-1", "-1,-1,0", "-1,-1,1", "0,-1,-1", "0,-1,0", "0,-1,1", "1,-1,-1", "1,-1,0", "1,-1,1").forEach { position ->
+            appendLine("              - position: $position")
+            appendLine("                type: shulker")
+            appendLine("                direction: up")
+            appendLine("                scale: 1")
+            appendLine("                peek: 0")
+            appendLine("                blocks-building: true")
+            appendLine("                interactive: false")
+            appendLine("                interaction-entity: false")
+        }
         listOf(
             Triple("p100", "mahjongcraft:stick_p100", "<!i><red>100 Point Stick</red>"),
             Triple("p1000", "mahjongcraft:stick_p1000", "<!i><white>1000 Point Stick</white>"),

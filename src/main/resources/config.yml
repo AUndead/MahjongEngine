@@ -81,7 +81,8 @@ integrations:
 
       # CraftEngine furniture id used for the table visual.
       # Set to "" to use the built-in block-display table fallback instead.
-      # This only replaces the table visual; the table interaction hitbox stays managed separately.
+      # When set, MahjongPaper uses that furniture as-is, including its own hitboxes and other behavior.
+      # Leave it empty to use the built-in block-display table plus MahjongPaper's fallback table hitbox.
       tableFurnitureId: mahjongpaper:table_visual
 
       # CraftEngine furniture id used for each table seat.
