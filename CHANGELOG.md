@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3 - 2026-03-17
+
+Post-match seat and table state fix release.
+
+- Fixed a bug where leaving your seat after a match ended could still leave you logically stuck in the table.
+- Seat occupancy now falls back to the live participant registry once a round is no longer in progress, instead of reading stale finished-match engine seats.
+- Added a regression test covering both finished-match seat removal and active-round engine seat usage.
+
 ## 0.3.2 - 2026-03-17
 
 CraftEngine table furniture behavior update.

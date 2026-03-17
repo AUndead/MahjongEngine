@@ -499,7 +499,7 @@ public final class MahjongTableSession {
     }
 
     public UUID playerAt(SeatWind wind) {
-        if (this.engine != null && !this.engine.getSeats().isEmpty()) {
+        if (this.engine != null && this.engine.getStarted() && !this.engine.getSeats().isEmpty()) {
             return UUID.fromString(this.engine.getSeats().get(wind.index()).getUuid());
         }
         return this.participants.playerAt(wind);

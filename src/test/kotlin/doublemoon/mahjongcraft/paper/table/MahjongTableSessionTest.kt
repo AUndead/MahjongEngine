@@ -1,0 +1,91 @@
+package doublemoon.mahjongcraft.paper.table.core
+
+import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin
+import doublemoon.mahjongcraft.paper.model.SeatWind
+import doublemoon.mahjongcraft.paper.riichi.RiichiPlayerState
+import doublemoon.mahjongcraft.paper.riichi.RiichiRoundEngine
+import org.bukkit.Location
+import org.bukkit.entity.Player
+import org.mockito.Mockito.`when`
+import org.mockito.Mockito.mock
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class MahjongTableSessionTest {
+    @Test
+    fun `player removal after finished round ignores stale engine seats`() {
+        val plugin = mock(MahjongPaperPlugin::class.java)
+        val session = MahjongTableSession(plugin, "TABLE01", Location(null, 0.0, 64.0, 0.0), false)
+        val eastId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val southId = UUID.fromString("00000000-0000-0000-0000-000000000002")
+        val westId = UUID.fromString("00000000-0000-0000-0000-000000000003")
+        val northId = UUID.fromString("00000000-0000-0000-0000-000000000004")
+
+        session.addPlayer(mockPlayer(eastId), SeatWind.EAST)
+        session.addPlayer(mockPlayer(southId), SeatWind.SOUTH)
+        session.addPlayer(mockPlayer(westId), SeatWind.WEST)
+        session.addPlayer(mockPlayer(northId), SeatWind.NORTH)
+        attachEngine(
+            session,
+            started = false,
+            seatIds = listOf(eastId, southId, westId, northId)
+        )
+
+        removeParticipant(session, eastId)
+        assertFalse(session.contains(eastId))
+        assertNull(session.playerAt(SeatWind.EAST))
+        assertNull(session.seatOf(eastId))
+        assertEquals(3, session.size())
+    }
+
+    @Test
+    fun `active round still reads seat occupants from engine`() {
+        val plugin = mock(MahjongPaperPlugin::class.java)
+        val session = MahjongTableSession(plugin, "TABLE02", Location(null, 0.0, 64.0, 0.0), false)
+        val eastId = UUID.fromString("00000000-0000-0000-0000-000000000011")
+        val southId = UUID.fromString("00000000-0000-0000-0000-000000000012")
+
+        session.addPlayer(mockPlayer(eastId), SeatWind.EAST)
+        session.addPlayer(mockPlayer(southId), SeatWind.SOUTH)
+        attachEngine(
+            session,
+            started = true,
+            seatIds = listOf(southId, eastId)
+        )
+
+        assertEquals(southId, session.playerAt(SeatWind.EAST))
+        assertEquals(eastId, session.playerAt(SeatWind.SOUTH))
+    }
+
+    private fun attachEngine(session: MahjongTableSession, started: Boolean, seatIds: List<UUID>) {
+        val engine = mock(RiichiRoundEngine::class.java)
+        `when`(engine.started).thenReturn(started)
+        `when`(engine.seats).thenReturn(seatIds.map(::mockSeatPlayer).toMutableList())
+        val engineField = MahjongTableSession::class.java.getDeclaredField("engine")
+        engineField.isAccessible = true
+        engineField.set(session, engine)
+    }
+
+    private fun mockSeatPlayer(playerId: UUID): RiichiPlayerState {
+        return RiichiPlayerState(playerId.toString(), playerId.toString())
+    }
+
+    private fun removeParticipant(session: MahjongTableSession, playerId: UUID) {
+        val participantsField = MahjongTableSession::class.java.getDeclaredField("participants")
+        participantsField.isAccessible = true
+        val participants = participantsField.get(session)
+        val removePlayer = participants.javaClass.getDeclaredMethod("removePlayer", UUID::class.java)
+        removePlayer.isAccessible = true
+        removePlayer.invoke(participants, playerId)
+    }
+
+    private fun mockPlayer(playerId: UUID): Player {
+        val player = mock(Player::class.java)
+        `when`(player.uniqueId).thenReturn(playerId)
+        return player
+    }
+}
