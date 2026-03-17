@@ -1,6 +1,8 @@
 package doublemoon.mahjongcraft.paper.command;
 
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.db.MahjongSoulRankProfile;
+import doublemoon.mahjongcraft.paper.db.MahjongSoulRankRules;
 import doublemoon.mahjongcraft.paper.i18n.MessageService;
 import doublemoon.mahjongcraft.paper.riichi.ReactionOptions;
 import doublemoon.mahjongcraft.paper.riichi.ReactionResponse;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import kotlin.Pair;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import io.papermc.paper.command.brigadier.BasicCommand;
@@ -29,7 +32,7 @@ public final class MahjongCommand implements BasicCommand {
     private static final List<String> ROOT_COMMANDS = List.of(
         "help", "create", "botmatch", "mode", "join", "leave", "list", "spectate", "unspectate", "addbot",
         "removebot", "rule", "start", "state", "riichi", "tsumo", "ron", "pon", "minkan", "chii", "kan",
-        "skip", "kyuushu", "settlement", "render", "inspect", "clear", "forceend", "deletetable"
+        "skip", "kyuushu", "settlement", "rank", "render", "inspect", "clear", "forceend", "deletetable"
     );
     private static final List<String> BOTMATCH_PRESETS = List.of("MAJSOUL_HANCHAN", "MAJSOUL_TONPUU", "hanchan", "tonpuu");
     private static final String[] HELP_KEYS = {
@@ -56,6 +59,7 @@ public final class MahjongCommand implements BasicCommand {
         "command.help.skip",
         "command.help.kyuushu",
         "command.help.settlement",
+        "command.help.rank",
         "command.help.render",
         "command.help.inspect",
         "command.help.clear",
@@ -325,6 +329,7 @@ public final class MahjongCommand implements BasicCommand {
                 }
                 this.messages.send(player, table.openSettlementUi(player) ? "command.settlement_opened" : "command.settlement_unavailable");
             }
+            case "rank" -> this.showRank(player);
             case "render" -> {
                 MahjongTableSession table = requireTable(player);
                 if (table == null) {
@@ -593,5 +598,56 @@ public final class MahjongCommand implements BasicCommand {
             }
         }
         return matches;
+    }
+
+    private void showRank(Player player) {
+        if (this.plugin.database() == null || !this.plugin.database().rankingEnabled()) {
+            this.messages.send(player, "command.rank_unavailable");
+            return;
+        }
+        this.messages.send(player, "command.rank_loading");
+        this.plugin.async().execute("load-rank-" + player.getUniqueId(), () -> {
+            try {
+                MahjongSoulRankProfile profile = this.plugin.database().loadRankProfile(player.getUniqueId(), player.getName());
+                Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (!player.isOnline()) {
+                        return;
+                    }
+                    Locale locale = this.messages.resolveLocale(player);
+                    this.messages.send(
+                        player,
+                        "command.rank_summary",
+                        this.messages.tag("rank", rankLabel(locale, profile)),
+                        this.messages.tag("points", MahjongSoulRankRules.formatPoints(profile)),
+                        this.messages.number(locale, "matches", profile.totalMatches()),
+                        this.messages.number(locale, "first", profile.firstPlaces()),
+                        this.messages.number(locale, "second", profile.secondPlaces()),
+                        this.messages.number(locale, "third", profile.thirdPlaces()),
+                        this.messages.number(locale, "fourth", profile.fourthPlaces())
+                    );
+                });
+            } catch (java.sql.SQLException ex) {
+                Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (player.isOnline()) {
+                        this.messages.send(player, "command.rank_failed");
+                    }
+                });
+            }
+        });
+    }
+
+    private String rankLabel(Locale locale, MahjongSoulRankProfile profile) {
+        String tierKey = switch (profile.tier()) {
+            case NOVICE -> "rank.tier.novice";
+            case ADEPT -> "rank.tier.adept";
+            case EXPERT -> "rank.tier.expert";
+            case MASTER -> "rank.tier.master";
+            case SAINT -> "rank.tier.saint";
+            case CELESTIAL -> "rank.tier.celestial";
+        };
+        if (profile.isCelestial()) {
+            return this.messages.plain(locale, tierKey) + " " + profile.level();
+        }
+        return this.messages.plain(locale, tierKey) + " " + profile.level();
     }
 }

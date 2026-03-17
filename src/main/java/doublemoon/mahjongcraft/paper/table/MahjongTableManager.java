@@ -7,6 +7,7 @@ import doublemoon.mahjongcraft.paper.render.DisplayClickAction.ActionType;
 import doublemoon.mahjongcraft.paper.render.DisplayEntities;
 import doublemoon.mahjongcraft.paper.render.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.ui.SettlementUi;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -41,20 +42,23 @@ public final class MahjongTableManager implements Listener {
     private static final double PERSISTED_TABLE_CLEANUP_RADIUS_XZ = 4.5D;
     private static final double PERSISTED_TABLE_CLEANUP_RADIUS_Y = 3.5D;
     private static final double ADMIN_NEAREST_TABLE_RADIUS = 4.5D;
-
     private final MahjongPaperPlugin plugin;
     private final PersistentTableStore persistentTableStore;
+    private final int startupRebuildBatchSize;
     private final Map<String, MahjongTableSession> tables = new LinkedHashMap<>();
     private final Map<UUID, String> playerTables = new LinkedHashMap<>();
     private final Map<UUID, String> spectatorTables = new LinkedHashMap<>();
     private final Map<TableChunkKey, Set<String>> tablesByChunk = new LinkedHashMap<>();
     private final Set<String> pendingArtifactCleanupTableIds = new HashSet<>();
+    private final ArrayDeque<String> startupRefreshQueue = new ArrayDeque<>();
     private final Map<UUID, RecentHandTileClick> recentHandTileClicks = new HashMap<>();
     private final BukkitTask tableTickTask;
+    private BukkitTask startupRefreshTask;
 
     public MahjongTableManager(MahjongPaperPlugin plugin) {
         this.plugin = plugin;
         this.persistentTableStore = new PersistentTableStore(plugin);
+        this.startupRebuildBatchSize = Math.max(1, plugin.settings().tableStartupRebuildBatchSize());
         this.tableTickTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> this.tables.values().forEach(MahjongTableSession::tick), 20L, 20L);
     }
 
@@ -64,8 +68,7 @@ public final class MahjongTableManager implements Listener {
         }
         String id = this.nextId();
         MahjongTableSession session = new MahjongTableSession(this.plugin, id, owner.getLocation().toCenterLocation(), owner);
-        this.tables.put(id, session);
-        this.indexTable(session);
+        this.registerTable(session);
         this.playerTables.put(owner.getUniqueId(), id);
         session.render();
         this.persistTables();
@@ -81,8 +84,7 @@ public final class MahjongTableManager implements Listener {
 
         String id = this.nextId();
         MahjongTableSession session = new MahjongTableSession(this.plugin, id, owner.getLocation().toCenterLocation(), owner, false);
-        this.tables.put(id, session);
-        this.indexTable(session);
+        this.registerTable(session);
         this.playerTables.put(owner.getUniqueId(), id);
 
         if (preset != null && !preset.isBlank()) {
@@ -261,17 +263,13 @@ public final class MahjongTableManager implements Listener {
         for (PersistentTableStore.LoadedTable loadedTable : this.persistentTableStore.load()) {
             String id = loadedTable.id().toUpperCase(Locale.ROOT);
             if (this.tables.containsKey(id)) {
-                this.plugin.getLogger().warning("Skipping duplicate persisted table id " + id + ".");
-                continue;
+                this.plugin.getLogger().warning("Persistent table id " + id + " already exists in memory, deleting it before startup rebuild.");
+                this.deleteTable(id);
             }
-            MahjongTableSession session = new MahjongTableSession(this.plugin, id, loadedTable.center(), loadedTable.rule(), true);
-            session.resetForServerStartup();
-            this.tables.put(id, session);
-            this.indexTable(session);
-            this.pendingArtifactCleanupTableIds.add(id);
-            this.cleanupTableArtifacts(session.center());
-            session.render();
-            this.plugin.debug().log("table", "Loaded persistent table " + id);
+            this.cleanupTableArtifacts(loadedTable.center());
+            this.createPersistentTable(loadedTable.id(), loadedTable.center(), loadedTable.rule());
+            this.enqueueStartupRefresh(id);
+            this.plugin.debug().log("table", "Queued persistent table " + id + " for startup rebuild");
         }
         this.persistTables();
     }
@@ -282,12 +280,11 @@ public final class MahjongTableManager implements Listener {
 
     public void refreshPersistentTablesAfterStartup() {
         for (MahjongTableSession session : this.tables.values()) {
-            if (!session.isPersistentRoom()) {
-                continue;
+            if (session.isPersistentRoom()) {
+                this.enqueueStartupRefresh(session.id());
             }
-            this.refreshPersistentTableArtifacts(session);
-            session.render();
         }
+        this.scheduleStartupRefreshTask();
     }
 
     public MahjongTableSession.ReadyResult start(Player player) {
@@ -379,6 +376,10 @@ public final class MahjongTableManager implements Listener {
 
     public void shutdown() {
         this.tableTickTask.cancel();
+        if (this.startupRefreshTask != null) {
+            this.startupRefreshTask.cancel();
+            this.startupRefreshTask = null;
+        }
         this.persistentTableStore.flush(this.tables.values());
         this.tables.values().forEach(MahjongTableSession::shutdown);
         this.tables.clear();
@@ -386,6 +387,7 @@ public final class MahjongTableManager implements Listener {
         this.spectatorTables.clear();
         this.tablesByChunk.clear();
         this.pendingArtifactCleanupTableIds.clear();
+        this.startupRefreshQueue.clear();
     }
 
     @EventHandler
@@ -541,6 +543,54 @@ public final class MahjongTableManager implements Listener {
 
     private boolean isViewingAnyTable(UUID playerId) {
         return this.playerTables.containsKey(playerId) || this.spectatorTables.containsKey(playerId);
+    }
+
+    private MahjongTableSession createPersistentTable(String tableId, Location center, doublemoon.mahjongcraft.paper.riichi.model.MahjongRule rule) {
+        String normalizedId = tableId.toUpperCase(Locale.ROOT);
+        MahjongTableSession session = new MahjongTableSession(this.plugin, normalizedId, center, rule, true);
+        this.registerTable(session);
+        this.pendingArtifactCleanupTableIds.add(normalizedId);
+        return session;
+    }
+
+    private void registerTable(MahjongTableSession session) {
+        this.tables.put(session.id(), session);
+        this.indexTable(session);
+    }
+
+    private void enqueueStartupRefresh(String tableId) {
+        if (tableId == null || this.startupRefreshQueue.contains(tableId)) {
+            return;
+        }
+        this.startupRefreshQueue.addLast(tableId);
+    }
+
+    private void scheduleStartupRefreshTask() {
+        if (this.startupRefreshQueue.isEmpty()) {
+            return;
+        }
+        if (this.startupRefreshTask != null && !this.startupRefreshTask.isCancelled()) {
+            return;
+        }
+        this.startupRefreshTask = Bukkit.getScheduler().runTaskTimer(this.plugin, this::processStartupRefreshBatch, 1L, 1L);
+    }
+
+    private void processStartupRefreshBatch() {
+        int processed = 0;
+        while (processed < this.startupRebuildBatchSize && !this.startupRefreshQueue.isEmpty()) {
+            String tableId = this.startupRefreshQueue.pollFirst();
+            MahjongTableSession session = this.resolveTable(tableId);
+            if (session == null || !session.isPersistentRoom()) {
+                continue;
+            }
+            this.refreshPersistentTableArtifacts(session);
+            session.render();
+            processed++;
+        }
+        if (this.startupRefreshQueue.isEmpty() && this.startupRefreshTask != null) {
+            this.startupRefreshTask.cancel();
+            this.startupRefreshTask = null;
+        }
     }
 
     private void indexTable(MahjongTableSession session) {

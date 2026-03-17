@@ -280,14 +280,23 @@ public final class TableRenderer {
             session.plugin(),
             handBase.clone().add(0.0D, 0.45D + FLOATING_TEXT_Y_OFFSET, 0.0D),
             Component.text(session.publicSeatStatus(wind)),
-            seatLabelColor(wind, active)
+            seatLabelColor(wind, active),
+            null,
+            Display.Billboard.FIXED,
+            seatYaw(wind),
+            0.0F
         ));
         if (playerId != null) {
             spawned.add(DisplayEntities.spawnLabel(
                 session.plugin(),
                 handBase.clone().add(0.0D, 0.26D + FLOATING_TEXT_Y_OFFSET, 0.0D),
                 Component.text(session.displayName(playerId, session.publicLocale())),
-                Color.fromARGB(100, 18, 18, 18)
+                Color.fromARGB(100, 18, 18, 18),
+                null,
+                Display.Billboard.FIXED,
+                seatYaw(wind),
+                0.0F,
+                false
             ));
             if (!session.isStarted()) {
                 spawned.add(DisplayEntities.spawnInteraction(
@@ -324,14 +333,23 @@ public final class TableRenderer {
             session.plugin(),
             toLocation(session, plan.statusLabelLocation()),
             Component.text(seat.publicSeatStatus()),
-            seatLabelColor(seat.wind(), active)
+            seatLabelColor(seat.wind(), active),
+            null,
+            Display.Billboard.FIXED,
+            seatYaw(seat.wind()),
+            0.0F
         ));
         if (seat.playerId() != null) {
             spawned.add(DisplayEntities.spawnLabel(
                 session.plugin(),
                 toLocation(session, plan.playerNameLocation()),
                 Component.text(seat.displayName()),
-                Color.fromARGB(100, 18, 18, 18)
+                Color.fromARGB(100, 18, 18, 18),
+                null,
+                Display.Billboard.FIXED,
+                seatYaw(seat.wind()),
+                0.0F,
+                false
             ));
             if (!session.isStarted()) {
                 spawned.add(DisplayEntities.spawnInteraction(

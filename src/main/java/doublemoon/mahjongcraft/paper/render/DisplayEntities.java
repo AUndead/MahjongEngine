@@ -146,6 +146,33 @@ public final class DisplayEntities {
     }
 
     public static TextDisplay spawnLabel(Plugin plugin, Location location, Component text, Color color, Collection<UUID> privateViewers) {
+        return spawnLabel(plugin, location, text, color, privateViewers, Display.Billboard.CENTER, 0.0F, 0.0F);
+    }
+
+    public static TextDisplay spawnLabel(
+        Plugin plugin,
+        Location location,
+        Component text,
+        Color color,
+        Collection<UUID> privateViewers,
+        Display.Billboard billboard,
+        float yaw,
+        float pitch
+    ) {
+        return spawnLabel(plugin, location, text, color, privateViewers, billboard, yaw, pitch, true);
+    }
+
+    public static TextDisplay spawnLabel(
+        Plugin plugin,
+        Location location,
+        Component text,
+        Color color,
+        Collection<UUID> privateViewers,
+        Display.Billboard billboard,
+        float yaw,
+        float pitch,
+        boolean shadowed
+    ) {
         World world = location.getWorld();
         if (world == null) {
             throw new IllegalArgumentException("Location world is null");
@@ -157,9 +184,10 @@ public final class DisplayEntities {
             markManagedEntity(plugin, spawned);
             spawned.text(text);
             spawned.setSeeThrough(false);
-            spawned.setShadowed(true);
+            spawned.setShadowed(shadowed);
             spawned.setDefaultBackground(false);
-            spawned.setBillboard(Display.Billboard.CENTER);
+            spawned.setBillboard(billboard);
+            spawned.setRotation(yaw, pitch);
             spawned.setLineWidth(160);
             spawned.setViewRange(LABEL_VIEW_RANGE);
             spawned.setBrightness(new Display.Brightness(15, 15));

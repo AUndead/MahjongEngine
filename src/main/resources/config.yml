@@ -44,10 +44,24 @@ database:
     connectionTimeoutMillis: 10000
 
 tables:
+  # How many persistent tables are rebuilt per tick after startup.
+  # Lower values reduce startup lag; higher values finish recovery sooner.
+  startupRebuildBatchSize: 3
+
   persistence:
     # Persistent tables are restored from this file on startup.
     enabled: true
     file: tables.yml
+
+ranking:
+  # Mahjong Soul-style rank points and rank persistence.
+  # Requires database.enabled=true.
+  enabled: true
+
+  # Ranked room presets used for 4-player east-only and hanchan tables.
+  # Supported: BRONZE, SILVER, GOLD, JADE, THRONE
+  eastRoom: SILVER
+  southRoom: GOLD
 
 integrations:
   craftengine:

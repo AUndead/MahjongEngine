@@ -79,6 +79,7 @@ public final class MahjongTableSession {
     private UUID lastPublicDiscardPlayerId;
     private String lastSettlementFingerprint = "";
     private String lastPersistedSettlementFingerprint = "";
+    private String lastPersistedRankFingerprint = "";
     private String lastTurnSoundFingerprint = "";
     private String lastRiichiSoundFingerprint = "";
     private String lastResolutionSoundFingerprint = "";
@@ -358,6 +359,7 @@ public final class MahjongTableSession {
         this.clearLastPublicDiscard();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
         this.regionFingerprints.clear();
         this.lastResolutionSoundFingerprint = "";
         this.render();
@@ -712,6 +714,7 @@ public final class MahjongTableSession {
         this.clearLastPublicDiscard();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
         this.regionFingerprints.clear();
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
@@ -732,6 +735,7 @@ public final class MahjongTableSession {
         this.clearLastPublicDiscard();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
         this.regionFingerprints.clear();
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
@@ -752,6 +756,7 @@ public final class MahjongTableSession {
         this.clearLastPublicDiscard();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
         this.regionFingerprints.clear();
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
@@ -1393,7 +1398,8 @@ public final class MahjongTableSession {
         for (int i = 0; i < ranked.size(); i++) {
             RiichiPlayerState player = ranked.get(i);
             double gameScore = MahjongSoulScoring.gameScore(player.getPoints(), i + 1);
-            standings.add(new FinalStanding(UUID.fromString(player.getUuid()), player.getDisplayName(), i + 1, player.getPoints(), gameScore));
+            UUID playerId = UUID.fromString(player.getUuid());
+            standings.add(new FinalStanding(playerId, player.getDisplayName(), i + 1, player.getPoints(), gameScore, this.isBot(playerId)));
         }
         return List.copyOf(standings);
     }
@@ -1406,6 +1412,7 @@ public final class MahjongTableSession {
 
         String settlementFingerprint = Objects.toString(this.engine.getLastResolution(), "");
         this.persistSettlementIfNeeded(settlementFingerprint);
+        this.persistRankIfNeeded(settlementFingerprint);
         this.syncSettlementFeedback(settlementFingerprint);
         this.lastSettlementFingerprint = settlementFingerprint;
         this.syncSeatFeedbackStates();
@@ -1424,6 +1431,7 @@ public final class MahjongTableSession {
         this.feedbackState.clear();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
+        this.lastPersistedRankFingerprint = "";
         this.cancelNextRoundCountdown();
     }
 
@@ -1433,6 +1441,21 @@ public final class MahjongTableSession {
         }
         this.plugin.database().persistRoundResultAsync(this, this.engine.getLastResolution());
         this.lastPersistedSettlementFingerprint = settlementFingerprint;
+    }
+
+    private void persistRankIfNeeded(String settlementFingerprint) {
+        if (settlementFingerprint.isBlank()
+            || settlementFingerprint.equals(this.lastPersistedRankFingerprint)
+            || this.plugin.database() == null
+            || !this.plugin.database().rankingEnabled()) {
+            return;
+        }
+        List<FinalStanding> standings = this.finalStandings();
+        if (standings.isEmpty()) {
+            return;
+        }
+        this.plugin.database().persistMatchRanksAsync(this.id, this.configuredRule.getLength(), standings);
+        this.lastPersistedRankFingerprint = settlementFingerprint;
     }
 
     private void syncSettlementFeedback(String settlementFingerprint) {
@@ -1742,9 +1765,7 @@ public final class MahjongTableSession {
         boolean spectator = this.isSpectator(viewerId);
         ViewerSummarySnapshot summary = this.captureViewerSummarySnapshot(locale, viewerId);
         Component overlay = this.viewerOverlay(locale, summary);
-        List<SpectatorSeatOverlaySnapshot> seatOverlays = spectator
-            ? this.captureSpectatorSeatOverlays(locale)
-            : List.of();
+        List<SpectatorSeatOverlaySnapshot> seatOverlays = List.of();
         String fingerprint = this.viewerOverlayFingerprint(locale, viewerId, spectator, summary, seatOverlays);
         return new ViewerOverlaySnapshot(viewerId, regionKey, spectator, overlay, seatOverlays, fingerprint);
     }
@@ -3091,13 +3112,15 @@ public final class MahjongTableSession {
         private final int place;
         private final int points;
         private final double gameScore;
+        private final boolean bot;
 
-        public FinalStanding(UUID playerId, String displayName, int place, int points, double gameScore) {
+        public FinalStanding(UUID playerId, String displayName, int place, int points, double gameScore, boolean bot) {
             this.playerId = playerId;
             this.displayName = displayName;
             this.place = place;
             this.points = points;
             this.gameScore = gameScore;
+            this.bot = bot;
         }
 
         public UUID playerId() {
@@ -3118,6 +3141,10 @@ public final class MahjongTableSession {
 
         public double gameScore() {
             return this.gameScore;
+        }
+
+        public boolean bot() {
+            return this.bot;
         }
     }
 

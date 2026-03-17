@@ -5,6 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import doublemoon.mahjongcraft.paper.ConfigAccess;
 import doublemoon.mahjongcraft.paper.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.riichi.RoundResolution;
+import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreItem;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreSettlement;
 import doublemoon.mahjongcraft.paper.riichi.model.YakuSettlement;
@@ -61,6 +62,10 @@ public final class DatabaseService {
         return this.databaseType;
     }
 
+    public boolean rankingEnabled() {
+        return this.plugin.settings().rankingEnabled();
+    }
+
     public void persistRoundResultAsync(MahjongTableSession session, RoundResolution resolution) {
         this.plugin.debug().log("database", "Queueing round persistence for table=" + session.id() + " title=" + resolution.getTitle());
         this.plugin.async().execute("persist-round-result", () -> {
@@ -71,6 +76,32 @@ public final class DatabaseService {
                 this.plugin.getLogger().warning("Failed to persist round result to " + this.databaseType + ": " + ex.getMessage());
             }
         });
+    }
+
+    public void persistMatchRanksAsync(String tableId, MahjongRule.GameLength length, List<MahjongTableSession.FinalStanding> standings) {
+        if (!this.rankingEnabled() || standings.isEmpty()) {
+            return;
+        }
+        List<MahjongTableSession.FinalStanding> snapshot = List.copyOf(standings);
+        this.plugin.debug().log("database", "Queueing rank persistence for table=" + tableId + " standings=" + snapshot.size());
+        this.plugin.async().execute("persist-match-ranks", () -> {
+            try {
+                this.persistMatchRanks(tableId, length, snapshot);
+                this.plugin.debug().log("database", "Persisted match rank results for table=" + tableId);
+            } catch (SQLException ex) {
+                this.plugin.getLogger().warning("Failed to persist match rank results to " + this.databaseType + ": " + ex.getMessage());
+            }
+        });
+    }
+
+    public MahjongSoulRankProfile loadRankProfile(java.util.UUID playerId, String displayName) throws SQLException {
+        if (!this.rankingEnabled()) {
+            return MahjongSoulRankProfile.defaultProfile(playerId, displayName);
+        }
+        try (Connection connection = this.dataSource.getConnection()) {
+            MahjongSoulRankProfile profile = this.selectRankProfile(connection, playerId);
+            return profile == null ? MahjongSoulRankProfile.defaultProfile(playerId, displayName) : profile;
+        }
     }
 
     private HikariConfig hikariConfig(ConfigurationSection config) {
@@ -149,6 +180,41 @@ public final class DatabaseService {
                     CONSTRAINT fk_round_player_result_history
                         FOREIGN KEY (round_history_id) REFERENCES round_history(id)
                         ON DELETE CASCADE
+                )
+                """);
+            statement.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS player_rank (
+                    player_uuid VARCHAR(36) PRIMARY KEY,
+                    display_name VARCHAR(64) NOT NULL,
+                    rank_tier VARCHAR(16) NOT NULL,
+                    rank_level INT NOT NULL,
+                    rank_points INT NOT NULL,
+                    total_matches INT NOT NULL DEFAULT 0,
+                    first_places INT NOT NULL DEFAULT 0,
+                    second_places INT NOT NULL DEFAULT 0,
+                    third_places INT NOT NULL DEFAULT 0,
+                    fourth_places INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+            statement.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS rank_history (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    table_id VARCHAR(32) NOT NULL,
+                    player_uuid VARCHAR(36) NOT NULL,
+                    display_name VARCHAR(64) NOT NULL,
+                    room_code VARCHAR(16) NOT NULL,
+                    match_length VARCHAR(16) NOT NULL,
+                    place INT NOT NULL,
+                    raw_score INT NOT NULL,
+                    rank_point_change INT NOT NULL,
+                    previous_tier VARCHAR(16) NOT NULL,
+                    previous_level INT NOT NULL,
+                    previous_points INT NOT NULL,
+                    updated_tier VARCHAR(16) NOT NULL,
+                    updated_level INT NOT NULL,
+                    updated_points INT NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
         }
@@ -260,6 +326,60 @@ public final class DatabaseService {
         return results;
     }
 
+    private void persistMatchRanks(String tableId, MahjongRule.GameLength gameLength, List<MahjongTableSession.FinalStanding> standings) throws SQLException {
+        List<MahjongTableSession.FinalStanding> humanStandings = standings.stream()
+            .filter(standing -> !standing.bot())
+            .toList();
+        if (humanStandings.isEmpty()) {
+            return;
+        }
+
+        MahjongSoulRankRules.MatchLength matchLength = MahjongSoulRankRules.matchLength(gameLength);
+        MahjongSoulRankRules.Room room = MahjongSoulRankRules.roomFor(
+            matchLength,
+            this.plugin.settings().rankingEastRoom(),
+            this.plugin.settings().rankingSouthRoom()
+        );
+
+        try (Connection connection = this.dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                Map<java.util.UUID, MahjongSoulRankProfile> currentProfiles = new HashMap<>();
+                boolean allPlayersCelestial = true;
+                for (MahjongTableSession.FinalStanding standing : humanStandings) {
+                    MahjongSoulRankProfile current = this.selectRankProfile(connection, standing.playerId());
+                    if (current == null) {
+                        current = MahjongSoulRankProfile.defaultProfile(standing.playerId(), standing.displayName());
+                    }
+                    currentProfiles.put(standing.playerId(), current);
+                    if (!current.isCelestial()) {
+                        allPlayersCelestial = false;
+                    }
+                }
+
+                for (MahjongTableSession.FinalStanding standing : humanStandings) {
+                    MahjongSoulRankProfile current = currentProfiles.get(standing.playerId());
+                    MahjongSoulRankRules.RankedMatchResult result = MahjongSoulRankRules.applyMatch(
+                        current,
+                        room,
+                        matchLength,
+                        standing.place(),
+                        standing.points(),
+                        allPlayersCelestial
+                    );
+                    this.upsertRankProfile(connection, result.updated().playerId(), result.updated());
+                    this.insertRankHistory(connection, tableId, standing.displayName(), result);
+                }
+                connection.commit();
+            } catch (SQLException ex) {
+                connection.rollback();
+                throw ex;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
     private static List<String> unionKeys(Map<String, ScoreItem> scoreItems, Map<String, YakuSettlement> yakuSettlements) {
         List<String> keys = new ArrayList<>(scoreItems.keySet());
         for (String uuid : yakuSettlements.keySet()) {
@@ -362,6 +482,135 @@ public final class DatabaseService {
             statement.setNull(parameterIndex, java.sql.Types.INTEGER);
         } else {
             statement.setInt(parameterIndex, value);
+        }
+    }
+
+    private MahjongSoulRankProfile selectRankProfile(Connection connection, java.util.UUID playerId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+            SELECT player_uuid, display_name, rank_tier, rank_level, rank_points,
+                   total_matches, first_places, second_places, third_places, fourth_places
+            FROM player_rank
+            WHERE player_uuid = ?
+            """)) {
+            statement.setString(1, playerId.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                return new MahjongSoulRankProfile(
+                    java.util.UUID.fromString(resultSet.getString("player_uuid")),
+                    resultSet.getString("display_name"),
+                    MahjongSoulRankRules.Tier.valueOf(resultSet.getString("rank_tier")),
+                    resultSet.getInt("rank_level"),
+                    resultSet.getInt("rank_points"),
+                    resultSet.getInt("total_matches"),
+                    resultSet.getInt("first_places"),
+                    resultSet.getInt("second_places"),
+                    resultSet.getInt("third_places"),
+                    resultSet.getInt("fourth_places")
+                );
+            }
+        }
+    }
+
+    private void upsertRankProfile(Connection connection, java.util.UUID playerId, MahjongSoulRankProfile profile) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+            MERGE INTO player_rank (
+                player_uuid, display_name, rank_tier, rank_level, rank_points,
+                total_matches, first_places, second_places, third_places, fourth_places, updated_at
+            ) KEY (player_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """)) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, profile.displayName());
+            statement.setString(3, profile.tier().name());
+            statement.setInt(4, profile.level());
+            statement.setInt(5, profile.rankPoints());
+            statement.setInt(6, profile.totalMatches());
+            statement.setInt(7, profile.firstPlaces());
+            statement.setInt(8, profile.secondPlaces());
+            statement.setInt(9, profile.thirdPlaces());
+            statement.setInt(10, profile.fourthPlaces());
+            statement.setTimestamp(11, Timestamp.from(Instant.now()));
+            statement.executeUpdate();
+        } catch (SQLException mergeFailure) {
+            this.upsertRankProfilePortable(connection, playerId, profile, mergeFailure);
+        }
+    }
+
+    private void upsertRankProfilePortable(Connection connection, java.util.UUID playerId, MahjongSoulRankProfile profile, SQLException mergeFailure) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE player_rank SET
+                display_name = ?, rank_tier = ?, rank_level = ?, rank_points = ?,
+                total_matches = ?, first_places = ?, second_places = ?, third_places = ?, fourth_places = ?, updated_at = ?
+            WHERE player_uuid = ?
+            """)) {
+            update.setString(1, profile.displayName());
+            update.setString(2, profile.tier().name());
+            update.setInt(3, profile.level());
+            update.setInt(4, profile.rankPoints());
+            update.setInt(5, profile.totalMatches());
+            update.setInt(6, profile.firstPlaces());
+            update.setInt(7, profile.secondPlaces());
+            update.setInt(8, profile.thirdPlaces());
+            update.setInt(9, profile.fourthPlaces());
+            update.setTimestamp(10, Timestamp.from(Instant.now()));
+            update.setString(11, playerId.toString());
+            if (update.executeUpdate() > 0) {
+                return;
+            }
+        }
+        try (PreparedStatement insert = connection.prepareStatement("""
+            INSERT INTO player_rank (
+                player_uuid, display_name, rank_tier, rank_level, rank_points,
+                total_matches, first_places, second_places, third_places, fourth_places, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """)) {
+            insert.setString(1, playerId.toString());
+            insert.setString(2, profile.displayName());
+            insert.setString(3, profile.tier().name());
+            insert.setInt(4, profile.level());
+            insert.setInt(5, profile.rankPoints());
+            insert.setInt(6, profile.totalMatches());
+            insert.setInt(7, profile.firstPlaces());
+            insert.setInt(8, profile.secondPlaces());
+            insert.setInt(9, profile.thirdPlaces());
+            insert.setInt(10, profile.fourthPlaces());
+            insert.setTimestamp(11, Timestamp.from(Instant.now()));
+            insert.executeUpdate();
+        } catch (SQLException insertFailure) {
+            insertFailure.addSuppressed(mergeFailure);
+            throw insertFailure;
+        }
+    }
+
+    private void insertRankHistory(
+        Connection connection,
+        String tableId,
+        String displayName,
+        MahjongSoulRankRules.RankedMatchResult result
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+            INSERT INTO rank_history (
+                table_id, player_uuid, display_name, room_code, match_length, place, raw_score, rank_point_change,
+                previous_tier, previous_level, previous_points, updated_tier, updated_level, updated_points, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """)) {
+            statement.setString(1, tableId);
+            statement.setString(2, result.updated().playerId().toString());
+            statement.setString(3, displayName);
+            statement.setString(4, result.room().name());
+            statement.setString(5, result.length().name());
+            statement.setInt(6, result.place());
+            statement.setInt(7, result.rawScore());
+            statement.setInt(8, result.rankPointChange());
+            statement.setString(9, result.previous().tier().name());
+            statement.setInt(10, result.previous().level());
+            statement.setInt(11, result.previous().rankPoints());
+            statement.setString(12, result.updated().tier().name());
+            statement.setInt(13, result.updated().level());
+            statement.setInt(14, result.updated().rankPoints());
+            statement.setTimestamp(15, Timestamp.from(Instant.now()));
+            statement.executeUpdate();
         }
     }
 
