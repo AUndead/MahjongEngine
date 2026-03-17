@@ -71,13 +71,11 @@ public final class MahjongTableManager implements Listener {
             return this.sessionForViewer(owner.getUniqueId());
         }
         String id = this.nextId();
-        MahjongTableSession session = new MahjongTableSession(this.plugin, id, owner.getLocation().toCenterLocation(), owner);
+        MahjongTableSession session = new MahjongTableSession(this.plugin, id, owner.getLocation().toCenterLocation(), true);
         this.registerTable(session);
-        this.playerTables.put(owner.getUniqueId(), id);
         session.render();
         this.persistTables();
         this.plugin.debug().log("table", "Created table " + id + " for " + owner.getName());
-        this.sendReadyPrompt(owner);
         return session;
     }
 
@@ -186,9 +184,7 @@ public final class MahjongTableManager implements Listener {
                 : new LeaveResult(LeaveStatus.UNSPECTATED, spectatorSession);
         }
         if (session.isStarted()) {
-            return session.queueLeaveAfterRound(playerId)
-                ? new LeaveResult(LeaveStatus.DEFERRED, session)
-                : new LeaveResult(LeaveStatus.BLOCKED, session);
+            return new LeaveResult(LeaveStatus.BLOCKED, session);
         }
         this.ejectSeatOccupant(playerId);
         if (!session.removePlayer(playerId)) {
@@ -442,7 +438,7 @@ public final class MahjongTableManager implements Listener {
         MahjongTableSession session = this.resolveTable(action.tableId());
         if (session != null && session.isStarted()) {
             event.setCancelled(true);
-            this.plugin.messages().actionBar(player, "command.leave_after_round");
+            this.plugin.messages().actionBar(player, "command.leave_blocked_started");
             return;
         }
         Bukkit.getScheduler().runTask(this.plugin, () -> this.leave(player.getUniqueId()));
@@ -849,7 +845,6 @@ public final class MahjongTableManager implements Listener {
 
     public enum LeaveStatus {
         LEFT,
-        DEFERRED,
         UNSPECTATED,
         NOT_IN_TABLE,
         BLOCKED

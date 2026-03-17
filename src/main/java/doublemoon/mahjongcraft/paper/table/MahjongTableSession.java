@@ -96,6 +96,10 @@ public final class MahjongTableSession {
         this.addPlayer(owner);
     }
 
+    public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, boolean persistentRoom) {
+        this(plugin, id, center, majsoulRule(MahjongRule.GameLength.TWO_WIND), persistentRoom);
+    }
+
     public MahjongTableSession(MahjongPaperPlugin plugin, String id, Location center, Player owner, boolean persistentRoom) {
         this(plugin, id, center, majsoulRule(MahjongRule.GameLength.TWO_WIND), persistentRoom);
         this.addPlayer(owner);
