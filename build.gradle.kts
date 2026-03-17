@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "doublemoon.mahjongcraft"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0"
 
 val kotlinRuntimeVersion = "2.2.0"
 val kotlinSerializationVersion = "1.9.0"
