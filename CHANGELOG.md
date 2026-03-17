@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3 - 2026-03-17
+
+Interaction and CraftEngine furniture alignment release.
+
+- Added `/mahjong reload` so MahjongPaper can reload config/runtime services and re-render active tables without a full server restart.
+- Fixed duplicate display-action handling so seat joins and ready toggles are no longer processed twice from overlapping entity interaction events.
+- Reworked private hand interaction back to dedicated `Interaction` entities so hand tiles remain clickable while the tile visuals keep their movement animation.
+- Adjusted custom CraftEngine table and chair furniture anchors so replacing `tableFurnitureId` or `seatFurnitureId` no longer leaves external furniture floating about 1 block and 6 pixels too high.
+
 ## 0.4.2 - 2026-03-17
 
 Config template hotfix release.

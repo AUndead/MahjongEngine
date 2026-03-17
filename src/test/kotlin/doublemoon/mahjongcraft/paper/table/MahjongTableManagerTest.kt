@@ -11,6 +11,22 @@ import kotlin.test.assertTrue
 
 class MahjongTableManagerTest {
     @Test
+    fun `same display action matches toggle ready duplicates`() {
+        val left = DisplayClickAction.toggleReady("TABLE01", SeatWind.EAST)
+        val right = DisplayClickAction.toggleReady("TABLE01", SeatWind.EAST)
+
+        assertTrue(MahjongTableManager.sameDisplayAction(left, right))
+    }
+
+    @Test
+    fun `different display action does not match different ready seats`() {
+        val left = DisplayClickAction.toggleReady("TABLE01", SeatWind.EAST)
+        val right = DisplayClickAction.toggleReady("TABLE01", SeatWind.SOUTH)
+
+        assertFalse(MahjongTableManager.sameDisplayAction(left, right))
+    }
+
+    @Test
     fun `same seat join action is treated as an existing binding`() {
         val playerId = UUID.fromString("00000000-0000-0000-0000-000000000021")
         val session = mock(MahjongTableSession::class.java)

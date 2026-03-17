@@ -27,12 +27,12 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 public final class MahjongCommand implements BasicCommand {
     private static final Set<String> ADMIN_ROOT_COMMANDS = Set.of(
-        "create", "botmatch", "list", "render", "inspect", "clear", "forceend", "deletetable"
+        "create", "botmatch", "list", "render", "inspect", "clear", "forceend", "deletetable", "reload"
     );
     private static final List<String> ROOT_COMMANDS = List.of(
         "help", "create", "botmatch", "mode", "join", "leave", "list", "spectate", "unspectate", "addbot",
         "removebot", "rule", "start", "state", "riichi", "tsumo", "ron", "pon", "minkan", "chii", "kan",
-        "skip", "kyuushu", "settlement", "rank", "render", "inspect", "clear", "forceend", "deletetable"
+        "skip", "kyuushu", "settlement", "rank", "render", "inspect", "clear", "forceend", "deletetable", "reload"
     );
     private static final List<String> BOTMATCH_PRESETS = List.of("MAJSOUL_HANCHAN", "MAJSOUL_TONPUU", "hanchan", "tonpuu");
     private static final String[] HELP_KEYS = {
@@ -64,7 +64,8 @@ public final class MahjongCommand implements BasicCommand {
         "command.help.inspect",
         "command.help.clear",
         "command.help.forceend",
-        "command.help.deletetable"
+        "command.help.deletetable",
+        "command.help.reload"
     };
     private static final Set<String> ADMIN_HELP_KEYS = Set.of(
         "command.help.create",
@@ -74,7 +75,8 @@ public final class MahjongCommand implements BasicCommand {
         "command.help.inspect",
         "command.help.clear",
         "command.help.forceend",
-        "command.help.deletetable"
+        "command.help.deletetable",
+        "command.help.reload"
     );
     private final MahjongPaperPlugin plugin;
     private final MessageService messages;
@@ -92,17 +94,24 @@ public final class MahjongCommand implements BasicCommand {
     }
 
     private void handleCommand(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player player)) {
-            this.messages.send(sender, "common.only_players");
-            return;
-        }
-
         if (args.length == 0) {
-            this.sendHelp(player);
+            if (sender instanceof Player player) {
+                this.sendHelp(player);
+            } else {
+                this.messages.send(sender, "command.usage");
+            }
             return;
         }
 
         String sub = args[0].toLowerCase(Locale.ROOT);
+        if ("reload".equals(sub)) {
+            this.handleReload(sender);
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            this.messages.send(sender, "common.only_players");
+            return;
+        }
         if (this.isAdminRootCommand(sub) && !this.requireAdmin(player)) {
             return;
         }
@@ -468,6 +477,19 @@ public final class MahjongCommand implements BasicCommand {
         }
         this.messages.send(player, "command.admin_required");
         return false;
+    }
+
+    private void handleReload(CommandSender sender) {
+        if (!sender.hasPermission("mahjongpaper.admin")) {
+            this.messages.send(sender, "command.admin_required");
+            return;
+        }
+        String failure = this.plugin.reloadMahjongConfiguration();
+        if (failure == null) {
+            this.messages.send(sender, "command.reload_success");
+            return;
+        }
+        this.messages.send(sender, "command.reload_failed", this.messages.tag("reason", failure));
     }
 
     private boolean isAdminRootCommand(String subcommand) {

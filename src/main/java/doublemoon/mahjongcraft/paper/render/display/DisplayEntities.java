@@ -75,7 +75,7 @@ public final class DisplayEntities {
         DisplayClickAction clickAction,
         boolean visibleByDefault
     ) {
-        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, null, TILE_SCALE, null, null);
+        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, null, TILE_SCALE, null, null, true);
     }
 
     public static TileDisplaySpec tileDisplaySpec(
@@ -87,7 +87,7 @@ public final class DisplayEntities {
         boolean visibleByDefault,
         Collection<UUID> privateViewers
     ) {
-        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, TILE_SCALE, null, null);
+        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, TILE_SCALE, null, null, true);
     }
 
     public static TileDisplaySpec tileDisplaySpec(
@@ -102,7 +102,23 @@ public final class DisplayEntities {
         Color glowColor,
         Display.Billboard billboard
     ) {
-        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, scale, glowColor, billboard);
+        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, scale, glowColor, billboard, true);
+    }
+
+    public static TileDisplaySpec tileDisplaySpec(
+        Location location,
+        float yaw,
+        MahjongTile tile,
+        TileRenderPose pose,
+        DisplayClickAction clickAction,
+        boolean visibleByDefault,
+        Collection<UUID> privateViewers,
+        float scale,
+        Color glowColor,
+        Display.Billboard billboard,
+        boolean smoothMovement
+    ) {
+        return new TileDisplaySpec(location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, scale, glowColor, billboard, smoothMovement);
     }
 
     public static LabelSpec labelSpec(Plugin plugin, Location location, Component text, Color color) {
@@ -158,7 +174,8 @@ public final class DisplayEntities {
         Collection<UUID> privateViewers,
         float scale,
         Color glowColor,
-        Display.Billboard billboard
+        Display.Billboard billboard,
+        boolean smoothMovement
     ) implements EntitySpec {
         public TileDisplaySpec {
             privateViewers = privateViewers == null ? null : List.copyOf(privateViewers);
@@ -166,7 +183,20 @@ public final class DisplayEntities {
 
         @Override
         public Entity spawn(Plugin plugin) {
-            return spawnTileDisplay(plugin, this.location, this.yaw, this.tile, this.pose, this.clickAction, this.visibleByDefault, this.privateViewers, this.scale, this.glowColor, this.billboard);
+            return spawnTileDisplay(
+                plugin,
+                this.location,
+                this.yaw,
+                this.tile,
+                this.pose,
+                this.clickAction,
+                this.visibleByDefault,
+                this.privateViewers,
+                this.scale,
+                this.glowColor,
+                this.billboard,
+                this.smoothMovement
+            );
         }
 
         @Override
@@ -290,6 +320,23 @@ public final class DisplayEntities {
         Color glowColor,
         Display.Billboard billboard
     ) {
+        return spawnTileDisplay(plugin, location, yaw, tile, pose, clickAction, visibleByDefault, privateViewers, scale, glowColor, billboard, true);
+    }
+
+    public static ItemDisplay spawnTileDisplay(
+        Plugin plugin,
+        Location location,
+        float yaw,
+        MahjongTile tile,
+        TileRenderPose pose,
+        DisplayClickAction clickAction,
+        boolean visibleByDefault,
+        Collection<UUID> privateViewers,
+        float scale,
+        Color glowColor,
+        Display.Billboard billboard,
+        boolean smoothMovement
+    ) {
         World world = location.getWorld();
         if (world == null) {
             throw new IllegalArgumentException("Location world is null");
@@ -300,9 +347,9 @@ public final class DisplayEntities {
             spawned.setPersistent(false);
             markManagedEntity(plugin, spawned);
             spawned.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
-            spawned.setInterpolationDuration(1);
+            spawned.setInterpolationDuration(smoothMovement ? 1 : 0);
             spawned.setInterpolationDelay(0);
-            spawned.setTeleportDuration(1);
+            spawned.setTeleportDuration(smoothMovement ? 1 : 0);
             spawned.setViewRange(32.0F);
             spawned.setShadowRadius(0.0F);
             spawned.setShadowStrength(0.0F);
@@ -495,9 +542,9 @@ public final class DisplayEntities {
     private static void applyTileDisplay(Plugin plugin, ItemDisplay display, TileDisplaySpec spec) {
         applyEntityLocation(display, spec.location(), spec.yaw(), 0.0F);
         display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
-        display.setInterpolationDuration(1);
+        display.setInterpolationDuration(spec.smoothMovement() ? 1 : 0);
         display.setInterpolationDelay(0);
-        display.setTeleportDuration(1);
+        display.setTeleportDuration(spec.smoothMovement() ? 1 : 0);
         display.setViewRange(32.0F);
         display.setShadowRadius(0.0F);
         display.setShadowStrength(0.0F);

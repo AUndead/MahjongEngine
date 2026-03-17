@@ -2,7 +2,6 @@ package doublemoon.mahjongcraft.paper.render.scene;
 
 import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.model.SeatWind;
-import doublemoon.mahjongcraft.paper.render.display.CraftEngineFurnitureSpec;
 import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction;
 import doublemoon.mahjongcraft.paper.render.display.DisplayEntities;
 import doublemoon.mahjongcraft.paper.render.layout.DiscardLayout;
@@ -78,8 +77,9 @@ public final class TableRenderer {
     private static final int DEAD_WALL_SIZE = 14;
     private static final int LIVE_WALL_SIZE = TOTAL_WALL_TILES - DEAD_WALL_SIZE;
     private static final int DISCARDS_PER_ROW = 6;
+    private static final double CUSTOM_FURNITURE_ORIGIN_Y_OFFSET = 1.375D;
     private static final String TABLE_VISUAL_FURNITURE_ID = "mahjongpaper:table_visual";
-    private static final String HAND_TILE_HITBOX_FURNITURE_ID = "mahjongpaper:hand_tile_hitbox";
+    private static final String SEAT_VISUAL_FURNITURE_ID = "mahjongpaper:seat_chair";
     private static final String STICK_FURNITURE_PREFIX = "mahjongpaper:stick_";
 
     public List<Entity> renderTableStructure(MahjongTableSession session) {
@@ -738,11 +738,19 @@ public final class TableRenderer {
                 DisplayEntities.TileRenderPose.STANDING,
                 null,
                 true,
-                ownerOnly
+                ownerOnly,
+                1.0F,
+                null,
+                null,
+                true
             ));
-            Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
+            Entity clickHitbox = DisplayEntities.spawnInteraction(
+                session.plugin(),
                 handInteractionLocation(tileLocation),
-                DisplayClickAction.handTile(session.id(), seat.playerId(), tileIndex)
+                HAND_INTERACTION_WIDTH,
+                HAND_INTERACTION_HEIGHT,
+                DisplayClickAction.handTile(session.id(), seat.playerId(), tileIndex),
+                ownerOnly
             );
             if (clickHitbox != null) {
                 spawned.add(clickHitbox);
@@ -772,11 +780,19 @@ public final class TableRenderer {
             DisplayEntities.TileRenderPose.STANDING,
             null,
             true,
-            List.of(playerId)
+            List.of(playerId),
+            1.0F,
+            null,
+            null,
+            true
         ));
-        Entity clickHitbox = session.plugin().craftEngine().placeHandTileHitbox(
+        Entity clickHitbox = DisplayEntities.spawnInteraction(
+            session.plugin(),
             handInteractionLocation(tileLocation),
-            DisplayClickAction.handTile(session.id(), playerId, tileIndex)
+            HAND_INTERACTION_WIDTH,
+            HAND_INTERACTION_HEIGHT,
+            DisplayClickAction.handTile(session.id(), playerId, tileIndex),
+            List.of(playerId)
         );
         if (clickHitbox != null) {
             spawned.add(clickHitbox);
@@ -980,15 +996,21 @@ public final class TableRenderer {
             DisplayEntities.TileRenderPose.STANDING,
             null,
             true,
-            List.of(seat.playerId())
+            List.of(seat.playerId()),
+            1.0F,
+            null,
+            null,
+            true
         );
-        DisplayClickAction clickAction = DisplayClickAction.handTile(session.id(), seat.playerId(), tileIndex);
-        if (!session.plugin().craftEngine().canPlaceFurniture()) {
-            return List.of(tileSpec);
-        }
         return List.of(
             tileSpec,
-            new CraftEngineFurnitureSpec(handInteractionLocation(tileLocation), HAND_TILE_HITBOX_FURNITURE_ID, clickAction)
+            DisplayEntities.interactionSpec(
+                handInteractionLocation(tileLocation),
+                HAND_INTERACTION_WIDTH,
+                HAND_INTERACTION_HEIGHT,
+                DisplayClickAction.handTile(session.id(), seat.playerId(), tileIndex),
+                List.of(seat.playerId())
+            )
         );
     }
 
@@ -1149,7 +1171,11 @@ public final class TableRenderer {
         if (session.plugin().craftEngine() == null || furnitureId == null || furnitureId.isBlank()) {
             return null;
         }
-        return session.plugin().craftEngine().placeSeatFurniture(seatPlacementLocation(location, wind), furnitureId, action);
+        return session.plugin().craftEngine().placeSeatFurniture(
+            seatFurnitureAnchor(location, wind, furnitureId),
+            furnitureId,
+            action
+        );
     }
 
     private static Location seatPlacementLocation(Location location, SeatWind wind) {
@@ -1191,11 +1217,33 @@ public final class TableRenderer {
         if (tableFurnitureId == null) {
             return null;
         }
-        return session.plugin().craftEngine().placeFurniture(tableVisualAnchor(tableCenter), tableFurnitureId);
+        return session.plugin().craftEngine().placeFurniture(tableFurnitureAnchor(tableCenter, tableFurnitureId), tableFurnitureId);
     }
 
     private static Location tableVisualAnchor(Location tableCenter) {
         return tableCenter.clone().add(0.0D, TABLE_VISUAL_Y_OFFSET, 0.0D);
+    }
+
+    static Location tableFurnitureAnchor(Location tableCenter, String furnitureId) {
+        Location anchor = tableVisualAnchor(tableCenter);
+        return usesBuiltinTableFurnitureAnchor(furnitureId) ? anchor : standardFurnitureAnchor(anchor);
+    }
+
+    static Location seatFurnitureAnchor(Location location, SeatWind wind, String furnitureId) {
+        Location anchor = seatPlacementLocation(location, wind);
+        return usesBuiltinSeatFurnitureAnchor(furnitureId) ? anchor : standardFurnitureAnchor(anchor);
+    }
+
+    private static boolean usesBuiltinTableFurnitureAnchor(String furnitureId) {
+        return TABLE_VISUAL_FURNITURE_ID.equals(furnitureId);
+    }
+
+    private static boolean usesBuiltinSeatFurnitureAnchor(String furnitureId) {
+        return SEAT_VISUAL_FURNITURE_ID.equals(furnitureId);
+    }
+
+    private static Location standardFurnitureAnchor(Location anchor) {
+        return anchor.clone().subtract(0.0D, CUSTOM_FURNITURE_ORIGIN_Y_OFFSET, 0.0D);
     }
 
     private static Entity spawnPublicTile(

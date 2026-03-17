@@ -34,6 +34,7 @@ import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -41,6 +42,7 @@ import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.scheduler.BukkitTask;
 
 public final class MahjongTableManager implements Listener {
+    private static final long DUPLICATE_DISPLAY_ACTION_WINDOW_NANOS = 40_000_000L;
     private static final long DUPLICATE_HAND_TILE_CLICK_WINDOW_NANOS = 40_000_000L;
     private static final double PERSISTED_TABLE_CLEANUP_RADIUS_XZ = 4.5D;
     private static final double PERSISTED_TABLE_CLEANUP_RADIUS_Y = 3.5D;
@@ -48,6 +50,7 @@ public final class MahjongTableManager implements Listener {
     private final MahjongPaperPlugin plugin;
     private final PersistentTableStore persistentTableStore;
     private final TableDirectory directory = new TableDirectory();
+    private final Map<UUID, RecentDisplayAction> recentDisplayActions = new HashMap<>();
     private final Map<UUID, RecentHandTileClick> recentHandTileClicks = new HashMap<>();
     private final TableSeatCoordinator seatCoordinator;
     private final TableRefreshCoordinator refreshCoordinator;
@@ -383,6 +386,7 @@ public final class MahjongTableManager implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
+        this.recentDisplayActions.remove(playerId);
         this.recentHandTileClicks.remove(playerId);
         this.leave(playerId);
     }
@@ -458,21 +462,38 @@ public final class MahjongTableManager implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onDisplayInteract(PlayerInteractEntityEvent event) {
-        DisplayClickAction action = TableDisplayRegistry.get(event.getRightClicked().getEntityId());
+        this.handleDisplayInteract(event.getPlayer(), event.getRightClicked(), event);
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onDisplayInteractAt(PlayerInteractAtEntityEvent event) {
+        this.handleDisplayInteract(event.getPlayer(), event.getRightClicked(), event);
+    }
+
+    private void handleDisplayInteract(Player player, Entity clickedEntity, org.bukkit.event.Cancellable event) {
+        if (player == null || clickedEntity == null || event == null) {
+            return;
+        }
+        DisplayClickAction action = TableDisplayRegistry.get(clickedEntity.getEntityId());
         if (action == null) {
             return;
         }
-        if (this.plugin.craftEngine() != null && this.plugin.craftEngine().isFurnitureEntity(event.getRightClicked())) {
+        if (this.plugin.craftEngine() != null && this.plugin.craftEngine().isFurnitureEntity(clickedEntity)) {
             return;
         }
 
         event.setCancelled(true);
-        boolean accepted = this.handleDisplayAction(event.getPlayer(), action);
+        UUID playerId = player.getUniqueId();
+        if (this.isDuplicateDisplayAction(playerId, action)) {
+            return;
+        }
+        this.rememberDisplayAction(playerId, action);
+        boolean accepted = this.handleDisplayAction(player, action);
         if (!accepted) {
             if (action.actionType() == ActionType.HAND_TILE) {
-                this.plugin.messages().actionBar(event.getPlayer(), "packet.cannot_click_tile");
+                this.plugin.messages().actionBar(player, "packet.cannot_click_tile");
             } else {
-                this.plugin.messages().actionBar(event.getPlayer(), "command.join_failed");
+                this.plugin.messages().actionBar(player, "command.join_failed");
             }
         }
     }
@@ -502,6 +523,21 @@ public final class MahjongTableManager implements Listener {
             return false;
         }
         return System.nanoTime() - recent.timestampNanos() <= DUPLICATE_HAND_TILE_CLICK_WINDOW_NANOS;
+    }
+
+    private boolean isDuplicateDisplayAction(UUID playerId, DisplayClickAction action) {
+        RecentDisplayAction recent = this.recentDisplayActions.get(playerId);
+        if (recent == null || !recent.matches(action)) {
+            return false;
+        }
+        return System.nanoTime() - recent.timestampNanos() <= DUPLICATE_DISPLAY_ACTION_WINDOW_NANOS;
+    }
+
+    private void rememberDisplayAction(UUID playerId, DisplayClickAction action) {
+        if (playerId == null || action == null) {
+            return;
+        }
+        this.recentDisplayActions.put(playerId, new RecentDisplayAction(action, System.nanoTime()));
     }
 
     private void rememberHandTileClick(UUID playerId, String tableId, UUID ownerId, int tileIndex) {
@@ -655,6 +691,20 @@ public final class MahjongTableManager implements Listener {
             && currentSeat.seatOf(playerId) == action.seatWind();
     }
 
+    static boolean sameDisplayAction(DisplayClickAction left, DisplayClickAction right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.actionType() == right.actionType()
+            && java.util.Objects.equals(left.tableId(), right.tableId())
+            && java.util.Objects.equals(left.ownerId(), right.ownerId())
+            && left.tileIndex() == right.tileIndex()
+            && left.seatWind() == right.seatWind();
+    }
+
     public void sendReadyResult(Player player, MahjongTableSession.ReadyResult result) {
         if (player == null || result == null) {
             return;
@@ -675,6 +725,12 @@ public final class MahjongTableManager implements Listener {
         UNSPECTATED,
         NOT_IN_TABLE,
         BLOCKED
+    }
+
+    private record RecentDisplayAction(DisplayClickAction action, long timestampNanos) {
+        private boolean matches(DisplayClickAction candidate) {
+            return MahjongTableManager.sameDisplayAction(this.action, candidate);
+        }
     }
 }
 

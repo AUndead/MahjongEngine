@@ -28,26 +28,17 @@ public final class MahjongPaperPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         LocalizedConfigResource.saveIfMissing(this, Locale.getDefault());
-        this.reloadConfig();
-        this.settings = PluginSettings.from(this.getConfig());
-        this.debug = new DebugService(this.getLogger(), this.settings.debugSection());
         this.async = new AsyncService(this.getLogger());
-        this.debug.log("lifecycle", "Debug logging enabled.");
-        this.craftEngine = new CraftEngineService(this, this.settings.craftEngineSection());
+        String reloadFailure = this.reloadMahjongConfiguration();
+        if (reloadFailure != null) {
+            this.getLogger().severe("MahjongPaper failed to load configuration during startup: " + reloadFailure);
+            this.getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
 
-        if (DatabaseService.isEnabled(this.settings.databaseSection())) {
-            try {
-                this.database = new DatabaseService(this, this.settings.databaseSection());
-                this.getLogger().info("Database enabled: " + this.database.databaseType());
-                this.debug.log("database", "Database service initialized with type=" + this.database.databaseType());
-            } catch (DatabaseService.InitializationException ex) {
-                this.handleDatabaseStartupFailure(ex);
-                if (this.settings.databaseFailOnError()) {
-                    this.getLogger().severe("database.failOnError=true, stopping plugin startup.");
-                    this.getServer().getPluginManager().disablePlugin(this);
-                    return;
-                }
-            }
+        if (this.database != null) {
+            this.getLogger().info("Database enabled: " + this.database.databaseType());
+            this.debug.log("database", "Database service initialized with type=" + this.database.databaseType());
         }
 
         this.tableManager = new MahjongTableManager(this);
@@ -107,6 +98,52 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         if (this.debug != null && this.debug.isCategoryEnabled("database")) {
             this.getLogger().log(Level.SEVERE, "Database startup stack trace:", ex);
         }
+    }
+
+    public String reloadMahjongConfiguration() {
+        this.reloadConfig();
+
+        PluginSettings reloadedSettings = PluginSettings.from(this.getConfig());
+        DebugService reloadedDebug = new DebugService(this.getLogger(), reloadedSettings.debugSection());
+        CraftEngineService reloadedCraftEngine = new CraftEngineService(this, reloadedSettings.craftEngineSection());
+        DatabaseService reloadedDatabase = null;
+        if (DatabaseService.isEnabled(reloadedSettings.databaseSection())) {
+            try {
+                reloadedDatabase = new DatabaseService(this, reloadedSettings.databaseSection());
+            } catch (DatabaseService.InitializationException ex) {
+                this.handleDatabaseStartupFailure(ex);
+                if (reloadedSettings.databaseFailOnError()) {
+                    return ex.userFacingReason();
+                }
+            }
+        }
+
+        CraftEngineService previousCraftEngine = this.craftEngine;
+        DatabaseService previousDatabase = this.database;
+        if (previousCraftEngine != null) {
+            previousCraftEngine.disableFurnitureInteractionBridge();
+            previousCraftEngine.clearTrackedCullables();
+        }
+        if (previousDatabase != null) {
+            previousDatabase.close();
+        }
+
+        this.settings = reloadedSettings;
+        this.debug = reloadedDebug;
+        this.database = reloadedDatabase;
+        this.craftEngine = reloadedCraftEngine;
+        this.debug.log("lifecycle", "Debug logging enabled.");
+
+        if (this.tableManager != null) {
+            this.craftEngine.enableFurnitureInteractionBridge(this.tableManager);
+            this.craftEngine.initializeAfterStartup();
+            this.getServer().getOnlinePlayers().forEach(this.craftEngine::syncTrackedEntitiesFor);
+            this.tableManager.tables().forEach(table -> {
+                table.clearDisplays();
+                table.render();
+            });
+        }
+        return null;
     }
 
     public MessageService messages() {
