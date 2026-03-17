@@ -85,7 +85,7 @@ integrations:
       # mahjongpaper:east, mahjongpaper:m1, and mahjongpaper:back.
       # If preferCustomItems is false, or the resolved CraftEngine item cannot be built,
       # MahjongPaper falls back to its built-in direct item_model tile items.
-      tileItemIdPrefix: mahjongpaper:
+      tileItemIdPrefix: "mahjongpaper:"
 
     furniture:
       # Prefer CraftEngine furniture hitboxes for table and seat interaction.

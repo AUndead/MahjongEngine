@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 - 2026-03-17
+
+Config template hotfix release.
+
+- Fixed the default `tileItemIdPrefix` YAML value by quoting `mahjongpaper:` in all bundled config templates.
+- Added a regression test that loads every bundled config template through Bukkit YAML parsing to prevent invalid defaults from shipping again.
+
 ## 0.4.1 - 2026-03-17
 
 Config documentation clarification release.

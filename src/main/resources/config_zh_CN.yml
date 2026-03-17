@@ -83,7 +83,7 @@ integrations:
       # mahjongpaper:back 这样的物品 id。
       # 如果 preferCustomItems 为 false，或解析出的 CraftEngine 物品无法构建，
       # MahjongPaper 会回退到内置的 direct item_model 麻将牌物品。
-      tileItemIdPrefix: mahjongpaper:
+      tileItemIdPrefix: "mahjongpaper:"
 
     furniture:
       # 桌子和座位交互优先使用 CraftEngine 家具 hitbox。
