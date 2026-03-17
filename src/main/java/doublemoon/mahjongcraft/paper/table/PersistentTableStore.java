@@ -158,16 +158,28 @@ final class PersistentTableStore {
         if (section == null) {
             return rule;
         }
-        rule.setLength(MahjongRule.GameLength.valueOf(section.getString("length", rule.getLength().name())));
-        rule.setThinkingTime(MahjongRule.ThinkingTime.valueOf(section.getString("thinkingTime", rule.getThinkingTime().name())));
+        rule.setLength(this.enumValue(section.getString("length"), MahjongRule.GameLength.class, rule.getLength()));
+        rule.setThinkingTime(this.enumValue(section.getString("thinkingTime"), MahjongRule.ThinkingTime.class, rule.getThinkingTime()));
         rule.setStartingPoints(section.getInt("startingPoints", rule.getStartingPoints()));
         rule.setMinPointsToWin(section.getInt("minPointsToWin", rule.getMinPointsToWin()));
-        rule.setMinimumHan(MahjongRule.MinimumHan.valueOf(section.getString("minimumHan", rule.getMinimumHan().name())));
+        rule.setMinimumHan(this.enumValue(section.getString("minimumHan"), MahjongRule.MinimumHan.class, rule.getMinimumHan()));
         rule.setSpectate(section.getBoolean("spectate", rule.getSpectate()));
-        rule.setRedFive(MahjongRule.RedFive.valueOf(section.getString("redFive", rule.getRedFive().name())));
+        rule.setRedFive(this.enumValue(section.getString("redFive"), MahjongRule.RedFive.class, rule.getRedFive()));
         rule.setOpenTanyao(section.getBoolean("openTanyao", rule.getOpenTanyao()));
         rule.setLocalYaku(section.getBoolean("localYaku", rule.getLocalYaku()));
         return rule;
+    }
+
+    private <E extends Enum<E>> E enumValue(String rawValue, Class<E> enumType, E fallback) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Enum.valueOf(enumType, rawValue.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            this.plugin.getLogger().warning("Invalid persisted rule value '" + rawValue + "' for " + enumType.getSimpleName() + ", using " + fallback.name() + " instead.");
+            return fallback;
+        }
     }
 
     private void saveRule(ConfigurationSection section, MahjongRule rule) {

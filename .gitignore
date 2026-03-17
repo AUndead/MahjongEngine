@@ -2,6 +2,7 @@
 /.gradle-home/
 /.kotlin/
 /build/
+/logs/
 /_upstream/
 /.idea/
 /*.iml

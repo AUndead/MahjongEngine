@@ -6,6 +6,7 @@ plugins {
     jacoco
     kotlin("jvm") version "2.2.0"
     kotlin("plugin.serialization") version "2.2.0"
+    id("io.papermc.paperweight.userdev") version "2.0.0-beta.19"
 }
 
 group = "doublemoon.mahjongcraft"
@@ -479,17 +480,17 @@ val generateCraftEngineBundle = tasks.register("generateCraftEngineBundle") {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
     implementation("io.github.ssttkkl:mahjong-utils-jvm:$mahjongUtilsVersion")
     implementation("org.mariadb.jdbc:mariadb-java-client:$mariadbVersion")
     implementation("com.h2database:h2:$h2Version")
     implementation("com.zaxxer:HikariCP:$hikariVersion")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinRuntimeVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$kotlinSerializationVersion")
-    testCompileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    testRuntimeOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
+    testImplementation("org.mockito:mockito-core:5.15.2")
+    testImplementation("org.mockito:mockito-inline:5.2.0")
     testImplementation("net.kyori:adventure-api:$adventureVersion")
     testImplementation("net.kyori:adventure-text-minimessage:$adventureVersion")
     testImplementation("net.kyori:adventure-text-serializer-plain:$adventureVersion")
@@ -498,7 +499,19 @@ dependencies {
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
     withSourcesJar()
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+paperweight {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.REOBF_PRODUCTION
 }
 
 tasks {
@@ -532,7 +545,12 @@ tasks {
 
     test {
         useJUnitPlatform()
+        jvmArgs("-Dnet.bytebuddy.experimental=true")
         finalizedBy(jacocoTestReport)
+    }
+
+    assemble {
+        dependsOn(reobfJar)
     }
 
     jacocoTestReport {

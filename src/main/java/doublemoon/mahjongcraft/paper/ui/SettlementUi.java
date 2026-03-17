@@ -69,6 +69,12 @@ public final class SettlementUi {
 
     private static ItemStack summaryItem(MahjongTableSession session, RoundResolution resolution, Locale locale) {
         MessageService messages = session.plugin().messages();
+        List<Component> lore = summaryLore(session, resolution, locale);
+        return namedItem(Material.NETHER_STAR, messages.render(locale, "ui.summary_title", messages.tag("title", resolutionTitleLabel(session, locale, resolution.getTitle()))), lore);
+    }
+
+    static List<Component> summaryLore(MahjongTableSession session, RoundResolution resolution, Locale locale) {
+        MessageService messages = session.plugin().messages();
         List<Component> lore = new ArrayList<>();
         lore.add(messages.render(locale, "ui.summary.round", messages.tag("value", session.roundDisplay(locale))));
         lore.add(messages.render(locale, "ui.summary.dealer", messages.tag("value", session.dealerName(locale))));
@@ -78,7 +84,7 @@ public final class SettlementUi {
         if (resolution.getScoreSettlement() != null) {
             lore.add(messages.render(locale, "ui.summary.settled_players", messages.number(locale, "value", resolution.getScoreSettlement().getScoreList().size())));
         }
-        return namedItem(Material.NETHER_STAR, messages.render(locale, "ui.summary_title", messages.tag("title", resolutionTitleLabel(session, locale, resolution.getTitle()))), lore);
+        return lore;
     }
 
     private static void placeIndicatorRow(Inventory inventory, Locale locale, MahjongTableSession session, int startSlot, String key, List<MahjongTile> tiles) {
@@ -156,7 +162,7 @@ public final class SettlementUi {
         }
     }
 
-    private static List<Component> settlementLore(Locale locale, MahjongTableSession session, YakuSettlement settlement) {
+    static List<Component> settlementLore(Locale locale, MahjongTableSession session, YakuSettlement settlement) {
         MessageService messages = session.plugin().messages();
         List<Component> lore = new ArrayList<>();
         lore.add(messages.render(locale, "ui.fu_han", messages.number(locale, "fu", settlement.getFu()), messages.number(locale, "han", settlement.getHan())));

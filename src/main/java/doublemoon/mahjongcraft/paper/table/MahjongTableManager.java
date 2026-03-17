@@ -50,7 +50,7 @@ public final class MahjongTableManager implements Listener {
     private final Map<UUID, String> spectatorTables = new LinkedHashMap<>();
     private final Map<TableChunkKey, Set<String>> tablesByChunk = new LinkedHashMap<>();
     private final Set<String> pendingArtifactCleanupTableIds = new HashSet<>();
-    private final ArrayDeque<String> startupRefreshQueue = new ArrayDeque<>();
+    private final StartupRefreshQueue startupRefreshQueue = new StartupRefreshQueue();
     private final Map<UUID, RecentHandTileClick> recentHandTileClicks = new HashMap<>();
     private final BukkitTask tableTickTask;
     private BukkitTask startupRefreshTask;
@@ -266,7 +266,6 @@ public final class MahjongTableManager implements Listener {
                 this.plugin.getLogger().warning("Persistent table id " + id + " already exists in memory, deleting it before startup rebuild.");
                 this.deleteTable(id);
             }
-            this.cleanupTableArtifacts(loadedTable.center());
             this.createPersistentTable(loadedTable.id(), loadedTable.center(), loadedTable.rule());
             this.enqueueStartupRefresh(id);
             this.plugin.debug().log("table", "Queued persistent table " + id + " for startup rebuild");
@@ -425,8 +424,9 @@ public final class MahjongTableManager implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onChunkLoad(ChunkLoadEvent event) {
-        for (MahjongTableSession session : this.tables.values()) {
-            if (!this.affectsTableArea(event.getChunk(), session)) {
+        for (String tableId : this.tableIdsNearChunk(event.getChunk())) {
+            MahjongTableSession session = this.resolveTable(tableId);
+            if (session == null || !this.affectsTableArea(event.getChunk(), session)) {
                 continue;
             }
             this.cleanupLoadedTableArtifactsIfNeeded(session);
@@ -559,10 +559,7 @@ public final class MahjongTableManager implements Listener {
     }
 
     private void enqueueStartupRefresh(String tableId) {
-        if (tableId == null || this.startupRefreshQueue.contains(tableId)) {
-            return;
-        }
-        this.startupRefreshQueue.addLast(tableId);
+        this.startupRefreshQueue.enqueue(tableId);
     }
 
     private void scheduleStartupRefreshTask() {
@@ -578,7 +575,7 @@ public final class MahjongTableManager implements Listener {
     private void processStartupRefreshBatch() {
         int processed = 0;
         while (processed < this.startupRebuildBatchSize && !this.startupRefreshQueue.isEmpty()) {
-            String tableId = this.startupRefreshQueue.pollFirst();
+            String tableId = this.startupRefreshQueue.poll();
             MahjongTableSession session = this.resolveTable(tableId);
             if (session == null || !session.isPersistentRoom()) {
                 continue;
@@ -606,6 +603,17 @@ public final class MahjongTableManager implements Listener {
         if (ids.isEmpty()) {
             this.tablesByChunk.remove(TableChunkKey.from(session.center()));
         }
+    }
+
+    private Set<String> tableIdsNearChunk(Chunk chunk) {
+        Set<String> candidates = new HashSet<>();
+        for (ChunkNeighborhood.ChunkKey nearby : ChunkNeighborhood.around(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ())) {
+            Set<String> ids = this.tablesByChunk.get(new TableChunkKey(nearby.worldId(), nearby.chunkX(), nearby.chunkZ()));
+            if (ids != null) {
+                candidates.addAll(ids);
+            }
+        }
+        return candidates;
     }
 
     public void finalizeDeferredLeaves(MahjongTableSession session, Collection<UUID> playerIds) {

@@ -104,6 +104,14 @@ public final class DatabaseService {
         }
     }
 
+    void persistRoundResultSync(MahjongTableSession session, RoundResolution resolution) throws SQLException {
+        this.persistRoundResult(session, resolution);
+    }
+
+    void persistMatchRanksSync(String tableId, MahjongRule.GameLength length, List<MahjongTableSession.FinalStanding> standings) throws SQLException {
+        this.persistMatchRanks(tableId, length, standings);
+    }
+
     private HikariConfig hikariConfig(ConfigurationSection config) {
         HikariConfig hikari = new HikariConfig();
         ConfigurationSection pool = pool(config);

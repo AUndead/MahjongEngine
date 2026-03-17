@@ -1417,8 +1417,11 @@ public final class MahjongTableSession {
         String settlementFingerprint = Objects.toString(this.engine.getLastResolution(), "");
         this.persistSettlementIfNeeded(settlementFingerprint);
         this.persistRankIfNeeded(settlementFingerprint);
-        this.syncSettlementFeedback(settlementFingerprint);
-        this.lastSettlementFingerprint = settlementFingerprint;
+        boolean settlementChanged = SettlementFeedbackGate.isNewSettlement(settlementFingerprint, this.lastSettlementFingerprint);
+        if (settlementChanged) {
+            this.lastSettlementFingerprint = settlementFingerprint;
+        }
+        this.syncSettlementFeedback(settlementFingerprint, settlementChanged);
         this.syncSeatFeedbackStates();
     }
 
@@ -1462,8 +1465,8 @@ public final class MahjongTableSession {
         this.lastPersistedRankFingerprint = settlementFingerprint;
     }
 
-    private void syncSettlementFeedback(String settlementFingerprint) {
-        if (settlementFingerprint.isBlank() || settlementFingerprint.equals(this.lastSettlementFingerprint)) {
+    private void syncSettlementFeedback(String settlementFingerprint, boolean settlementChanged) {
+        if (settlementFingerprint.isBlank() || !settlementChanged) {
             return;
         }
         this.resetReadyStateForNextRound();
