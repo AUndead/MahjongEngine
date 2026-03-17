@@ -1,5 +1,6 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.presentation;
 
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -11,23 +12,23 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 
-final class TableViewerPresentationCoordinator {
+public final class TableViewerPresentationCoordinator {
     private final MahjongTableSession session;
     private final Map<UUID, BossBar> viewerHudBars = new HashMap<>();
     private final Map<UUID, String> viewerHudState = new HashMap<>();
     private boolean viewerOverlayDirty = true;
     private boolean viewerHudDirty = true;
 
-    TableViewerPresentationCoordinator(MahjongTableSession session) {
+    public TableViewerPresentationCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void markDirty() {
+    public void markDirty() {
         this.viewerOverlayDirty = true;
         this.viewerHudDirty = true;
     }
 
-    void flushIfNeeded() {
+    public void flushIfNeeded() {
         if (this.viewerOverlayDirty || this.hasViewerOverlayRegions()) {
             this.updateViewerOverlayRegions();
             this.viewerOverlayDirty = false;
@@ -38,20 +39,20 @@ final class TableViewerPresentationCoordinator {
         }
     }
 
-    boolean hasPresentationState() {
+    public boolean hasPresentationState() {
         return !this.session.viewers().isEmpty() || this.hasViewerOverlayRegions() || !this.viewerHudBars.isEmpty();
     }
 
-    void resetForLifecycleChange() {
+    public void resetForLifecycleChange() {
         this.markDirty();
     }
 
-    void shutdown() {
+    public void shutdown() {
         this.markDirty();
         this.clearHud();
     }
 
-    void hideHud(UUID viewerId) {
+    public void hideHud(UUID viewerId) {
         BossBar bar = this.viewerHudBars.remove(viewerId);
         this.viewerHudState.remove(viewerId);
         Player player = this.session.onlinePlayer(viewerId);
@@ -60,7 +61,7 @@ final class TableViewerPresentationCoordinator {
         }
     }
 
-    void clearHud() {
+    public void clearHud() {
         for (UUID viewerId : List.copyOf(this.viewerHudBars.keySet())) {
             this.hideHud(viewerId);
         }
@@ -148,3 +149,4 @@ final class TableViewerPresentationCoordinator {
         }
     }
 }
+

@@ -1,7 +1,8 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.presentation;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.riichi.ReactionOptions;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -10,14 +11,14 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 
-final class TableViewerSnapshotFactory {
+public final class TableViewerSnapshotFactory {
     private final MahjongTableSession session;
 
-    TableViewerSnapshotFactory(MahjongTableSession session) {
+    public TableViewerSnapshotFactory(MahjongTableSession session) {
         this.session = session;
     }
 
-    Component createStateSummary(Player player) {
+    public Component createStateSummary(Player player) {
         if (this.session.engine() == null) {
             return this.session.plugin().messages().render(player, "command.table_not_started");
         }
@@ -31,12 +32,12 @@ final class TableViewerSnapshotFactory {
         );
     }
 
-    Component createViewerOverlay(Player viewer) {
+    public Component createViewerOverlay(Player viewer) {
         Locale locale = this.session.plugin().messages().resolveLocale(viewer);
         return this.viewerOverlay(locale, this.captureViewerSummarySnapshot(locale, viewer.getUniqueId()));
     }
 
-    MahjongTableSession.ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
+    public MahjongTableSession.ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
         Locale locale = this.session.plugin().messages().resolveLocale(viewer);
         UUID viewerId = viewer.getUniqueId();
         String regionKey = "viewer-overlay:" + viewerId;
@@ -48,7 +49,7 @@ final class TableViewerSnapshotFactory {
         return new MahjongTableSession.ViewerOverlaySnapshot(viewerId, regionKey, spectator, overlay, seatOverlays, fingerprint);
     }
 
-    MahjongTableSession.ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
+    public MahjongTableSession.ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
         float progress = this.hudProgress();
         BossBar.Color color = this.hudColor(viewerId);
         ViewerSummarySnapshot summary = this.captureViewerSummarySnapshot(locale, viewerId);
@@ -141,7 +142,7 @@ final class TableViewerSnapshotFactory {
             .field(summary.turn())
             .field(summary.wall())
             .field(summary.roleLabel())
-            .field(this.session.lastPublicDiscardPlayerIdValue())
+            .field(this.session.lastPublicDiscardPlayerId())
             .field(this.session.lastPublicDiscardTile())
             .field(summary.reactionOptionsFingerprint())
             .toString();
@@ -320,7 +321,7 @@ final class TableViewerSnapshotFactory {
         builder.field(this.session.roundDisplay())
             .field(this.session.engine().getWall().size())
             .field(this.session.engine().getCurrentPlayerIndex())
-            .field(this.session.lastPublicDiscardPlayerIdValue())
+            .field(this.session.lastPublicDiscardPlayerId())
             .field(this.session.lastPublicDiscardTile())
             .field(summary.reactionOptionsFingerprint());
         for (MahjongTableSession.SpectatorSeatOverlaySnapshot seatOverlay : seatOverlays) {
@@ -399,13 +400,13 @@ final class TableViewerSnapshotFactory {
     }
 
     private String lastDiscardSummary(Locale locale) {
-        if (this.session.lastPublicDiscardPlayerIdValue() == null || this.session.lastPublicDiscardTile() == null) {
+        if (this.session.lastPublicDiscardPlayerId() == null || this.session.lastPublicDiscardTile() == null) {
             return this.session.plugin().messages().plain(locale, "table.last_discard_none");
         }
         return this.session.plugin().messages().plain(
             locale,
             "table.last_discard",
-            this.session.plugin().messages().tag("player", this.session.displayName(this.session.lastPublicDiscardPlayerIdValue(), locale)),
+            this.session.plugin().messages().tag("player", this.session.displayName(this.session.lastPublicDiscardPlayerId(), locale)),
             this.session.plugin().messages().tag("tile", this.tileLabel(locale, this.session.lastPublicDiscardTile().name()))
         );
     }
@@ -458,3 +459,4 @@ final class TableViewerSnapshotFactory {
         }
     }
 }
+

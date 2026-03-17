@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
 import java.util.Set;
 import java.util.UUID;
@@ -14,3 +14,4 @@ final class TableAreaChunks {
         return loadedChunks.containsAll(ChunkNeighborhood.around(worldId, centerChunkX, centerChunkZ));
     }
 }
+

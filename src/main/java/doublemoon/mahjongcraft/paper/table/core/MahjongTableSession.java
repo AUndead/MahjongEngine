@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.core;
 
 import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.i18n.LocalizedMessages;
@@ -12,15 +12,22 @@ import doublemoon.mahjongcraft.paper.riichi.RiichiRoundEngine;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongSoulScoring;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
+import doublemoon.mahjongcraft.paper.table.presentation.TablePlayerFeedbackCoordinator;
 import doublemoon.mahjongcraft.paper.table.presentation.TablePublicTextFactory;
+import doublemoon.mahjongcraft.paper.table.presentation.TableStateSoundCoordinator;
+import doublemoon.mahjongcraft.paper.table.presentation.TableViewerPresentationCoordinator;
+import doublemoon.mahjongcraft.paper.table.presentation.TableViewerSnapshotFactory;
+import doublemoon.mahjongcraft.paper.table.render.TableRegionDisplayCoordinator;
+import doublemoon.mahjongcraft.paper.table.render.TableRegionFingerprintService;
+import doublemoon.mahjongcraft.paper.table.render.TableRenderCoordinator;
+import doublemoon.mahjongcraft.paper.table.render.TableRenderInspectCoordinator;
+import doublemoon.mahjongcraft.paper.table.render.TableRenderSnapshotFactory;
+import doublemoon.mahjongcraft.paper.table.runtime.BotActionScheduler;
+import doublemoon.mahjongcraft.paper.table.runtime.TableLifecycleCoordinator;
 import doublemoon.mahjongcraft.paper.ui.SettlementUi;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -43,21 +50,16 @@ public final class MahjongTableSession {
     private final String id;
     private final Location center;
     private final boolean persistentRoom;
-    private final List<UUID> seats = new ArrayList<>(Collections.nCopies(4, null));
-    private final Set<UUID> spectators = new LinkedHashSet<>();
+    private final TableParticipantRegistry participants = new TableParticipantRegistry();
     private final TableRenderer renderer = new TableRenderer();
     private final TableRenderSnapshotFactory renderSnapshotFactory = new TableRenderSnapshotFactory();
     private final TableRegionFingerprintService regionFingerprintService = new TableRegionFingerprintService();
-    private final Map<UUID, String> botNames = new LinkedHashMap<>();
     private final Map<UUID, Integer> selectedHandTileIndices = new HashMap<>();
-    private final Set<UUID> readyPlayers = new LinkedHashSet<>();
-    private final Set<UUID> leaveAfterRoundPlayers = new LinkedHashSet<>();
     private MahjongRule configuredRule;
     private RiichiRoundEngine engine;
     private doublemoon.mahjongcraft.paper.model.MahjongTile lastPublicDiscardTile;
     private UUID lastPublicDiscardPlayerId;
     private long nextRoundDeadlineMillis;
-    private int nextBotNumber = 1;
     private BukkitTask botTask;
     private final TableRenderCoordinator renderCoordinator;
     private final TableViewerPresentationCoordinator viewerPresentation;
@@ -138,50 +140,26 @@ public final class MahjongTableSession {
     }
 
     public boolean addPlayer(Player player, SeatWind wind) {
-        UUID playerId = player.getUniqueId();
-        if (wind == null || this.seats.contains(playerId) || this.playerAt(wind) != null) {
-            return false;
-        }
-        if (this.size() >= 4) {
-            return false;
-        }
-        this.spectators.remove(player.getUniqueId());
-        this.seats.set(wind.index(), playerId);
-        this.leaveAfterRoundPlayers.remove(playerId);
-        this.readyPlayers.remove(playerId);
-        return true;
+        return this.participants.addPlayer(player.getUniqueId(), wind);
     }
 
     public boolean addSpectator(Player player) {
-        UUID playerId = player.getUniqueId();
-        if (!this.currentRule().getSpectate() || this.seats.contains(playerId) || this.spectators.contains(playerId)) {
-            return false;
-        }
-        this.spectators.add(playerId);
-        return true;
+        return this.participants.addSpectator(player.getUniqueId(), this.currentRule().getSpectate());
     }
 
     public boolean removeSpectator(UUID playerId) {
         this.viewerPresentation.hideHud(playerId);
-        return this.spectators.remove(playerId);
+        return this.participants.removeSpectator(playerId);
     }
 
     public boolean addBot() {
         if (this.isStarted() || this.size() >= 4) {
             return false;
         }
-        UUID botId;
-        do {
-            botId = UUID.nameUUIDFromBytes((this.id + "-bot-" + this.nextBotNumber).getBytes(StandardCharsets.UTF_8));
-            this.nextBotNumber++;
-        } while (this.seats.contains(botId));
-        SeatWind emptySeat = this.firstEmptySeat();
-        if (emptySeat == null) {
+        UUID botId = this.participants.createNextBotId(this.id);
+        if (!this.participants.addBot(botId)) {
             return false;
         }
-        this.seats.set(emptySeat.index(), botId);
-        this.botNames.put(botId, "Bot-" + this.botNames.size());
-        this.readyPlayers.add(botId);
         this.render();
         this.maybeStartRoundIfReady();
         return true;
@@ -191,20 +169,14 @@ public final class MahjongTableSession {
         if (this.isStarted()) {
             return false;
         }
-        for (int i = this.seats.size() - 1; i >= 0; i--) {
-            UUID playerId = this.seats.get(i);
-            if (playerId != null && this.botNames.containsKey(playerId)) {
-                this.seats.set(i, null);
-                this.botNames.remove(playerId);
-                this.playerFeedbackCoordinator.clearPlayerState(playerId);
-                this.selectedHandTileIndices.remove(playerId);
-                this.readyPlayers.remove(playerId);
-                this.leaveAfterRoundPlayers.remove(playerId);
-                this.render();
-                return true;
-            }
+        UUID playerId = this.participants.removeLastBot();
+        if (playerId == null) {
+            return false;
         }
-        return false;
+        this.playerFeedbackCoordinator.clearPlayerState(playerId);
+        this.selectedHandTileIndices.remove(playerId);
+        this.render();
+        return true;
     }
 
     public boolean removePlayer(UUID playerId) {
@@ -213,59 +185,40 @@ public final class MahjongTableSession {
         }
         this.viewerPresentation.hideHud(playerId);
         this.playerFeedbackCoordinator.clearPlayerState(playerId);
-        this.botNames.remove(playerId);
         this.selectedHandTileIndices.remove(playerId);
-        this.readyPlayers.remove(playerId);
-        this.leaveAfterRoundPlayers.remove(playerId);
-        int seatIndex = this.seats.indexOf(playerId);
-        if (seatIndex < 0) {
-            return false;
-        }
-        this.seats.set(seatIndex, null);
-        return true;
+        return this.participants.removePlayer(playerId);
     }
 
     public boolean contains(UUID playerId) {
-        return this.seats.contains(playerId);
+        return this.participants.contains(playerId);
     }
 
     public boolean isEmpty() {
-        return this.size() == 0;
+        return this.participants.isEmpty();
     }
 
     public int size() {
-        int occupied = 0;
-        for (UUID playerId : this.seats) {
-            if (playerId != null) {
-                occupied++;
-            }
-        }
-        return occupied;
+        return this.participants.size();
     }
 
     public int botCount() {
-        return this.botNames.size();
+        return this.participants.botCount();
     }
 
     public int spectatorCount() {
-        return this.spectators.size();
+        return this.participants.spectatorCount();
     }
 
     public List<UUID> players() {
-        return this.seats.stream().filter(Objects::nonNull).toList();
+        return this.participants.players();
     }
 
     public Set<UUID> spectators() {
-        return Set.copyOf(this.spectators);
+        return this.participants.spectators();
     }
 
     public UUID owner() {
-        for (UUID playerId : this.seats) {
-            if (playerId != null) {
-                return playerId;
-            }
-        }
-        return null;
+        return this.participants.owner();
     }
 
     public SeatWind seatOf(UUID playerId) {
@@ -281,21 +234,15 @@ public final class MahjongTableSession {
     }
 
     public boolean isReady(UUID playerId) {
-        return playerId != null && (this.isBot(playerId) || this.readyPlayers.contains(playerId));
+        return this.participants.isReady(playerId);
     }
 
     public int readyCount() {
-        int ready = 0;
-        for (UUID playerId : this.seats) {
-            if (playerId != null && this.isReady(playerId)) {
-                ready++;
-            }
-        }
-        return ready;
+        return this.participants.readyCount();
     }
 
     public boolean isQueuedToLeave(UUID playerId) {
-        return playerId != null && this.leaveAfterRoundPlayers.contains(playerId);
+        return this.participants.isQueuedToLeave(playerId);
     }
 
     public ReadyResult toggleReady(UUID playerId) {
@@ -303,14 +250,7 @@ public final class MahjongTableSession {
             return ReadyResult.BLOCKED;
         }
 
-        boolean nowReady;
-        if (this.readyPlayers.contains(playerId)) {
-            this.readyPlayers.remove(playerId);
-            nowReady = false;
-        } else {
-            this.readyPlayers.add(playerId);
-            nowReady = true;
-        }
+        boolean nowReady = this.participants.toggleReady(playerId);
 
         if (nowReady && this.maybeStartRoundIfReady()) {
             return ReadyResult.STARTED;
@@ -324,7 +264,7 @@ public final class MahjongTableSession {
         if (playerId == null || !this.contains(playerId) || !this.isStarted()) {
             return false;
         }
-        this.leaveAfterRoundPlayers.add(playerId);
+        this.participants.queueLeave(playerId);
         return true;
     }
 
@@ -456,7 +396,7 @@ public final class MahjongTableSession {
         this.renderCoordinator.clearDisplays();
     }
 
-    void applyRenderPrecompute(RenderPrecomputeResult result) {
+    public void applyRenderPrecompute(RenderPrecomputeResult result) {
         this.regionDisplayCoordinator.applyRenderPrecompute(result);
         this.viewerPresentation.flushIfNeeded();
     }
@@ -477,77 +417,77 @@ public final class MahjongTableSession {
         this.lifecycleCoordinator.resetForServerStartup();
     }
 
-    void cancelNextRoundCountdownForLifecycle() {
+    public void cancelNextRoundCountdownForLifecycle() {
         this.cancelNextRoundCountdown();
     }
 
-    void shutdownRenderFlow() {
+    public void shutdownRenderFlow() {
         this.renderCoordinator.shutdown();
     }
 
-    void shutdownViewerPresentation() {
+    public void shutdownViewerPresentation() {
         this.viewerPresentation.shutdown();
     }
 
-    void resetViewerPresentationForLifecycleChange() {
+    public void resetViewerPresentationForLifecycleChange() {
         this.viewerPresentation.resetForLifecycleChange();
     }
 
-    void clearFeedbackTracking() {
+    public void clearFeedbackTracking() {
         this.selectedHandTileIndices.clear();
     }
 
-    void clearRoundTrackingState() {
+    public void clearRoundTrackingState() {
         this.clearLastPublicDiscard();
         this.playerFeedbackCoordinator.resetState();
         this.stateSoundCoordinator.reset();
     }
 
-    void invalidateRenderFingerprints() {
+    public void invalidateRenderFingerprints() {
         this.regionDisplayCoordinator.invalidateFingerprints();
     }
 
-    void clearReadyPlayersForLifecycle() {
-        this.readyPlayers.clear();
+    public void clearReadyPlayersForLifecycle() {
+        this.participants.clearReadyPlayers();
     }
 
-    void clearLeaveQueueForLifecycle() {
-        this.leaveAfterRoundPlayers.clear();
+    public void clearLeaveQueueForLifecycle() {
+        this.participants.clearLeaveQueue();
     }
 
-    void clearSpectatorsForLifecycle() {
-        this.spectators.clear();
+    public void clearSpectatorsForLifecycle() {
+        this.participants.clearSpectators();
     }
 
-    void clearBotNamesForLifecycle() {
-        this.botNames.clear();
+    public void clearBotNamesForLifecycle() {
+        this.participants.clearBotNames();
     }
 
-    void clearSeatAssignmentsForLifecycle() {
-        Collections.fill(this.seats, null);
+    public void clearSeatAssignmentsForLifecycle() {
+        this.participants.clearSeats();
     }
 
-    void clearEngineForLifecycle() {
+    public void clearEngineForLifecycle() {
         this.engine = null;
     }
 
-    void cancelNextRoundCountdownForFeedback() {
+    public void cancelNextRoundCountdownForFeedback() {
         this.cancelNextRoundCountdown();
     }
 
-    void resetBotCounterForLifecycle() {
-        this.nextBotNumber = 1;
+    public void resetBotCounterForLifecycle() {
+        this.participants.resetBotCounter();
     }
 
-    void resetReadyStateForNextRoundForLifecycle() {
+    public void resetReadyStateForNextRoundForLifecycle() {
         this.resetReadyStateForNextRound();
     }
 
-    void resetReadyStateForNextRoundForFeedback() {
+    public void resetReadyStateForNextRoundForFeedback() {
         this.resetReadyStateForNextRound();
     }
 
-    void promptPlayersToReadyForFeedback() {
+    public void promptPlayersToReadyForFeedback() {
         this.promptPlayersToReady();
     }
 
@@ -562,7 +502,7 @@ public final class MahjongTableSession {
         if (this.engine != null && !this.engine.getSeats().isEmpty()) {
             return UUID.fromString(this.engine.getSeats().get(wind.index()).getUuid());
         }
-        return this.seats.get(wind.index());
+        return this.participants.playerAt(wind);
     }
 
     public String playerName(SeatWind wind) {
@@ -581,7 +521,7 @@ public final class MahjongTableSession {
         if (player != null) {
             return player.getName();
         }
-        if (this.botNames.containsKey(playerId)) {
+        if (this.participants.isBot(playerId)) {
             return this.botDisplayName(playerId, locale);
         }
         if (this.engine != null) {
@@ -594,7 +534,7 @@ public final class MahjongTableSession {
     }
 
     public boolean isBot(UUID playerId) {
-        return this.botNames.containsKey(playerId);
+        return this.participants.isBot(playerId);
     }
 
     public int points(UUID playerId) {
@@ -848,17 +788,17 @@ public final class MahjongTableSession {
     }
 
     public boolean isSpectator(UUID playerId) {
-        return this.spectators.contains(playerId);
+        return this.participants.spectatorIds().contains(playerId);
     }
 
     public List<Player> viewers() {
-        List<Player> viewers = new ArrayList<>(this.seats.size() + this.spectators.size());
+        List<Player> viewers = new ArrayList<>(this.participants.size() + this.participants.spectatorCount());
         this.appendOnlineViewers(viewers);
         return viewers;
     }
 
     public List<UUID> viewerIdsExcluding(UUID excludedPlayerId) {
-        List<UUID> viewerIds = new ArrayList<>(this.seats.size() + this.spectators.size());
+        List<UUID> viewerIds = new ArrayList<>(this.participants.size() + this.participants.spectatorCount());
         this.appendOnlineViewerIds(viewerIds, excludedPlayerId);
         return List.copyOf(viewerIds);
     }
@@ -964,11 +904,11 @@ public final class MahjongTableSession {
         return this.engine;
     }
 
-    void setBotTask(BukkitTask botTask) {
+    public void setBotTask(BukkitTask botTask) {
         this.botTask = botTask;
     }
 
-    void cancelBotTask() {
+    public void cancelBotTask() {
         if (this.botTask != null) {
             this.botTask.cancel();
             this.botTask = null;
@@ -1134,31 +1074,31 @@ public final class MahjongTableSession {
         return List.copyOf(standings);
     }
 
-    ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
+    public ViewerOverlaySnapshot captureViewerOverlaySnapshot(Player viewer) {
         return this.viewerSnapshotFactory.captureViewerOverlaySnapshot(viewer);
     }
 
-    ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
+    public ViewerHudSnapshot captureViewerHudSnapshot(Locale locale, UUID viewerId) {
         return this.viewerSnapshotFactory.captureViewerHudSnapshot(locale, viewerId);
     }
 
-    void updateViewerOverlayRegion(ViewerOverlaySnapshot snapshot) {
+    public void updateViewerOverlayRegion(ViewerOverlaySnapshot snapshot) {
         this.regionDisplayCoordinator.updateViewerOverlayRegion(snapshot);
     }
 
-    List<String> viewerOverlayRegionKeys() {
+    public List<String> viewerOverlayRegionKeys() {
         return this.regionDisplayCoordinator.regionKeys();
     }
 
-    void removeManagedRegionDisplays(String regionKey) {
+    public void removeManagedRegionDisplays(String regionKey) {
         this.regionDisplayCoordinator.removeManagedRegionDisplays(regionKey);
     }
 
-    List<UUID> seatIds() {
-        return this.seats;
+    public List<UUID> seatIds() {
+        return this.participants.seatIds();
     }
 
-    String viewerMembershipSignatureFor(UUID excludedPlayerId) {
+    public String viewerMembershipSignatureFor(UUID excludedPlayerId) {
         StringBuilder builder = new StringBuilder(96);
         this.appendOnlineViewerIds(builder, excludedPlayerId);
         return builder.toString();
@@ -1180,7 +1120,7 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSeatViewers(List<Player> target) {
-        for (UUID playerId : this.seats) {
+        for (UUID playerId : this.participants.seatIds()) {
             if (playerId == null) {
                 continue;
             }
@@ -1192,7 +1132,7 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSpectators(List<Player> target) {
-        for (UUID spectatorId : this.spectators) {
+        for (UUID spectatorId : this.participants.spectatorIds()) {
             Player player = Bukkit.getPlayer(spectatorId);
             if (player != null) {
                 target.add(player);
@@ -1201,7 +1141,7 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSeatViewerIds(List<UUID> target, UUID excludedPlayerId) {
-        for (UUID playerId : this.seats) {
+        for (UUID playerId : this.participants.seatIds()) {
             if (playerId == null) {
                 continue;
             }
@@ -1212,7 +1152,7 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSpectatorIds(List<UUID> target, UUID excludedPlayerId) {
-        for (UUID spectatorId : this.spectators) {
+        for (UUID spectatorId : this.participants.spectatorIds()) {
             if (!spectatorId.equals(excludedPlayerId) && Bukkit.getPlayer(spectatorId) != null) {
                 target.add(spectatorId);
             }
@@ -1220,7 +1160,7 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSeatViewerIds(StringBuilder target, UUID excludedPlayerId) {
-        for (UUID playerId : this.seats) {
+        for (UUID playerId : this.participants.seatIds()) {
             if (playerId == null) {
                 continue;
             }
@@ -1231,16 +1171,16 @@ public final class MahjongTableSession {
     }
 
     private void appendOnlineSpectatorIds(StringBuilder target, UUID excludedPlayerId) {
-        for (UUID spectatorId : this.spectators) {
+        for (UUID spectatorId : this.participants.spectatorIds()) {
             if (!spectatorId.equals(excludedPlayerId) && Bukkit.getPlayer(spectatorId) != null) {
                 target.append(spectatorId).append(';');
             }
         }
     }
 
-    String riichiFingerprintValue() {
+    public String riichiFingerprintValue() {
         FingerprintBuilder builder = fingerprintBuilder(64);
-        for (UUID playerId : this.seats) {
+        for (UUID playerId : this.participants.seatIds()) {
             if (playerId == null) {
                 continue;
             }
@@ -1264,28 +1204,28 @@ public final class MahjongTableSession {
         return Math.max(0L, (long) Math.ceil((this.nextRoundDeadlineMillis - System.currentTimeMillis()) / 1000.0D));
     }
 
-    long nextRoundSecondsRemainingValue() {
+    public long nextRoundSecondsRemainingValue() {
         return this.nextRoundSecondsRemaining();
     }
 
-    void prepareRenderRequest() {
+    public void prepareRenderRequest() {
         this.cancelBotTask();
         this.pruneSelectedHandTiles();
         this.viewerPresentation.markDirty();
     }
 
-    void completeRenderFlush() {
+    public void completeRenderFlush() {
         this.playerFeedbackCoordinator.sync();
         this.viewerPresentation.flushIfNeeded();
         this.stateSoundCoordinator.syncStateSounds();
         BotActionScheduler.schedule(this);
     }
 
-    RenderSnapshot captureRenderSnapshot(long version, long cancellationNonce) {
+    public RenderSnapshot captureRenderSnapshot(long version, long cancellationNonce) {
         return this.renderSnapshotFactory.create(this, version, cancellationNonce);
     }
 
-    RenderPrecomputeResult precomputeRender(RenderSnapshot snapshot) {
+    public RenderPrecomputeResult precomputeRender(RenderSnapshot snapshot) {
         return new RenderPrecomputeResult(
             snapshot,
             this.regionFingerprintService.precomputeRegionFingerprints(this, snapshot),
@@ -1304,21 +1244,21 @@ public final class MahjongTableSession {
             && Math.floorDiv(this.center.getBlockZ(), 16) == chunk.getZ();
     }
 
-    void clearRenderDisplays() {
+    public void clearRenderDisplays() {
         this.regionDisplayCoordinator.clearRenderDisplays();
     }
 
-    boolean hasRegionDisplays() {
+    public boolean hasRegionDisplays() {
         return this.regionDisplayCoordinator.hasRegionDisplays();
     }
 
-    boolean isCenterChunkLoaded() {
+    public boolean isCenterChunkLoaded() {
         World world = this.center.getWorld();
         return world != null
             && world.isChunkLoaded(Math.floorDiv(this.center.getBlockX(), 16), Math.floorDiv(this.center.getBlockZ(), 16));
     }
 
-    boolean hasStaleDisplayRegions() {
+    public boolean hasStaleDisplayRegions() {
         return this.regionDisplayCoordinator.hasStaleDisplayRegions();
     }
 
@@ -1396,7 +1336,7 @@ public final class MahjongTableSession {
     ) {
     }
 
-    record ViewerHudSnapshot(
+    public record ViewerHudSnapshot(
         Component title,
         float progress,
         BossBar.Color color,
@@ -1404,7 +1344,7 @@ public final class MahjongTableSession {
     ) {
     }
 
-    record RenderPrecomputeResult(
+    public record RenderPrecomputeResult(
         RenderSnapshot snapshot,
         Map<String, String> regionFingerprints,
         TableRenderLayout.LayoutPlan layout
@@ -1449,7 +1389,7 @@ public final class MahjongTableSession {
         return LocalizedMessages.DEFAULT_LOCALE;
     }
 
-    TableRenderer renderer() {
+    public TableRenderer renderer() {
         return this.renderer;
     }
 
@@ -1473,35 +1413,30 @@ public final class MahjongTableSession {
         return this.lastPublicDiscardPlayerId;
     }
 
-    UUID lastPublicDiscardPlayerIdValue() {
+    public UUID lastPublicDiscardPlayerIdValue() {
         return this.lastPublicDiscardPlayerId;
     }
 
     private String botDisplayName(UUID playerId, Locale locale) {
-        String raw = this.botNames.get(playerId);
+        String raw = this.participants.botDisplayNameSource(playerId);
         if (raw == null) {
             return this.plugin.messages().plain(locale, "common.unknown");
         }
-        int suffix = this.seats.indexOf(playerId) + 1;
+        int suffix = this.participants.seatIndexOf(playerId) + 1;
         return this.plugin.messages().plain(locale, "table.bot_name", this.plugin.messages().number(locale, "index", Math.max(1, suffix)));
     }
 
-    String tileLabelForDisplay(Locale locale, String tileName) {
+    public String tileLabelForDisplay(Locale locale, String tileName) {
         String key = "tile." + tileName.toLowerCase(Locale.ROOT);
         return this.plugin.messages().contains(locale, key) ? this.plugin.messages().plain(locale, key) : tileName.toLowerCase(Locale.ROOT);
     }
 
     private void resetReadyStateForNextRound() {
-        this.readyPlayers.clear();
-        for (UUID playerId : this.seats) {
-            if (playerId != null && this.isBot(playerId)) {
-                this.readyPlayers.add(playerId);
-            }
-        }
+        this.participants.readyBotsOnly();
     }
 
     private void promptPlayersToReady() {
-        for (UUID playerId : this.seats) {
+        for (UUID playerId : this.participants.seatIds()) {
             if (playerId == null || this.isBot(playerId) || this.isQueuedToLeave(playerId)) {
                 continue;
             }
@@ -1529,11 +1464,11 @@ public final class MahjongTableSession {
     }
 
     private void processDeferredLeaves() {
-        if (this.leaveAfterRoundPlayers.isEmpty() || this.isStarted()) {
+        if (!this.participants.hasQueuedLeaves() || this.isStarted()) {
             return;
         }
         List<UUID> removed = new ArrayList<>();
-        for (UUID playerId : List.copyOf(this.leaveAfterRoundPlayers)) {
+        for (UUID playerId : this.participants.queuedLeavePlayers()) {
             if (this.removePlayer(playerId)) {
                 removed.add(playerId);
             }
@@ -1541,7 +1476,7 @@ public final class MahjongTableSession {
         if (removed.isEmpty()) {
             return;
         }
-        this.leaveAfterRoundPlayers.removeAll(removed);
+        this.participants.removeQueuedLeaves(removed);
         if (this.plugin.tableManager() != null) {
             this.plugin.tableManager().finalizeDeferredLeaves(this, removed);
         }
@@ -1569,12 +1504,7 @@ public final class MahjongTableSession {
     }
 
     private SeatWind firstEmptySeat() {
-        for (SeatWind wind : SeatWind.values()) {
-            if (this.playerAt(wind) == null) {
-                return wind;
-            }
-        }
-        return null;
+        return this.participants.firstEmptySeat();
     }
 
     public static final class FinalStanding {
@@ -1626,3 +1556,6 @@ public final class MahjongTableSession {
         BLOCKED
     }
 }
+
+
+

@@ -1,6 +1,7 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.render;
 
 import doublemoon.mahjongcraft.paper.render.scene.TableRenderer;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -11,14 +12,14 @@ import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
-final class TableRenderInspectCoordinator {
+public final class TableRenderInspectCoordinator {
     private final MahjongTableSession session;
 
-    TableRenderInspectCoordinator(MahjongTableSession session) {
+    public TableRenderInspectCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void inspectRender(Player viewer) {
+    public void inspectRender(Player viewer) {
         if (viewer == null || !viewer.isOnline()) {
             return;
         }
@@ -178,3 +179,4 @@ final class TableRenderInspectCoordinator {
     ) {
     }
 }
+

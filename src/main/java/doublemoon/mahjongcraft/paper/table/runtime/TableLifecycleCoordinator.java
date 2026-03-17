@@ -1,13 +1,15 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
-final class TableLifecycleCoordinator {
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
+
+public final class TableLifecycleCoordinator {
     private final MahjongTableSession session;
 
-    TableLifecycleCoordinator(MahjongTableSession session) {
+    public TableLifecycleCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void shutdown() {
+    public void shutdown() {
         this.session.cancelBotTask();
         this.session.cancelNextRoundCountdownForLifecycle();
         this.session.shutdownRenderFlow();
@@ -21,7 +23,7 @@ final class TableLifecycleCoordinator {
         this.session.clearEngineForLifecycle();
     }
 
-    void forceEndMatch() {
+    public void forceEndMatch() {
         this.session.cancelBotTask();
         this.session.cancelNextRoundCountdownForLifecycle();
         this.session.shutdownRenderFlow();
@@ -35,7 +37,7 @@ final class TableLifecycleCoordinator {
         this.session.render();
     }
 
-    void resetForServerStartup() {
+    public void resetForServerStartup() {
         this.session.cancelBotTask();
         this.session.cancelNextRoundCountdownForLifecycle();
         this.session.shutdownRenderFlow();
@@ -52,3 +54,4 @@ final class TableLifecycleCoordinator {
         this.session.resetBotCounterForLifecycle();
     }
 }
+

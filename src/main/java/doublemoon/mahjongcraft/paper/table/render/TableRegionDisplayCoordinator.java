@@ -1,10 +1,11 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.render;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.render.display.DisplayEntities;
 import doublemoon.mahjongcraft.paper.render.display.DisplayVisibilityRegistry;
 import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.render.layout.TableRenderLayout;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.bukkit.entity.Entity;
 
-final class TableRegionDisplayCoordinator {
+public final class TableRegionDisplayCoordinator {
     private static final String REGION_TABLE = "table";
     private static final String REGION_WALL = "wall";
     private static final String REGION_DORA = "dora";
@@ -26,12 +27,12 @@ final class TableRegionDisplayCoordinator {
     private final Map<String, List<Entity>> regionDisplays = new LinkedHashMap<>();
     private final Map<String, String> regionFingerprints = new HashMap<>();
 
-    TableRegionDisplayCoordinator(MahjongTableSession session, TableRegionFingerprintService fingerprintService) {
+    public TableRegionDisplayCoordinator(MahjongTableSession session, TableRegionFingerprintService fingerprintService) {
         this.session = session;
         this.fingerprintService = fingerprintService;
     }
 
-    void applyRenderPrecompute(MahjongTableSession.RenderPrecomputeResult result) {
+    public void applyRenderPrecompute(MahjongTableSession.RenderPrecomputeResult result) {
         MahjongTableSession.RenderSnapshot snapshot = result.snapshot();
         TableRenderLayout.LayoutPlan plan = result.layout();
         Map<String, String> fingerprints = result.regionFingerprints();
@@ -69,11 +70,11 @@ final class TableRegionDisplayCoordinator {
         }
     }
 
-    void refreshPrivateHandRegions(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan) {
+    public void refreshPrivateHandRegions(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan) {
         this.updatePrivateHandRegions(seat, plan);
     }
 
-    void updateViewerOverlayRegion(MahjongTableSession.ViewerOverlaySnapshot snapshot) {
+    public void updateViewerOverlayRegion(MahjongTableSession.ViewerOverlaySnapshot snapshot) {
         this.updateRegionWithSpecs(
             snapshot.regionKey(),
             snapshot.fingerprint(),
@@ -81,28 +82,28 @@ final class TableRegionDisplayCoordinator {
         );
     }
 
-    List<String> regionKeys() {
+    public List<String> regionKeys() {
         return List.copyOf(this.regionDisplays.keySet());
     }
 
-    void removeManagedRegionDisplays(String regionKey) {
+    public void removeManagedRegionDisplays(String regionKey) {
         this.removeRegionDisplays(regionKey);
     }
 
-    void clearRenderDisplays() {
+    public void clearRenderDisplays() {
         this.regionFingerprints.clear();
         this.removeAllDisplays();
     }
 
-    void invalidateFingerprints() {
+    public void invalidateFingerprints() {
         this.regionFingerprints.clear();
     }
 
-    boolean hasRegionDisplays() {
+    public boolean hasRegionDisplays() {
         return !this.regionDisplays.isEmpty();
     }
 
-    boolean hasStaleDisplayRegions() {
+    public boolean hasStaleDisplayRegions() {
         for (List<Entity> entities : this.regionDisplays.values()) {
             if (this.hasInvalidDisplayEntity(entities)) {
                 return true;
@@ -304,3 +305,4 @@ final class TableRegionDisplayCoordinator {
         List<DisplayEntities.EntitySpec> render();
     }
 }
+

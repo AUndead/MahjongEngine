@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.core;
 
 import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
@@ -207,3 +207,4 @@ final class PersistentTableStore {
     ) {
     }
 }
+

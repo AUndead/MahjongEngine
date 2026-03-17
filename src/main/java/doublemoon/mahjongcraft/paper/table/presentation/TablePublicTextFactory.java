@@ -1,6 +1,6 @@
 package doublemoon.mahjongcraft.paper.table.presentation;
 
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
 import java.util.Locale;
@@ -199,3 +199,4 @@ public final class TablePublicTextFactory {
         return this.session.plugin().messages().plain(locale, this.session.isReady(playerId) ? "table.status.ready" : "table.status.waiting");
     }
 }
+

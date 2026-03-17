@@ -10,8 +10,8 @@ import doublemoon.mahjongcraft.paper.riichi.ReactionType;
 import doublemoon.mahjongcraft.paper.riichi.RiichiPlayerState;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.riichi.model.TileInstance;
-import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableManager;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -650,3 +650,4 @@ public final class MahjongCommand implements BasicCommand {
         return this.messages.plain(locale, tierKey) + " " + profile.level();
     }
 }
+

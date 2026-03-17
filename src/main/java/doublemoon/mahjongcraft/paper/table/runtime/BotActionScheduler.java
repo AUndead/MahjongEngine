@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
 import doublemoon.mahjongcraft.paper.riichi.ReactionOptions;
 import doublemoon.mahjongcraft.paper.riichi.ReactionResponse;
@@ -7,16 +7,17 @@ import doublemoon.mahjongcraft.paper.riichi.RiichiPlayerState;
 import doublemoon.mahjongcraft.paper.riichi.RiichiRoundEngine;
 import doublemoon.mahjongcraft.paper.riichi.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.riichi.model.TileInstance;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.Objects;
 import java.util.UUID;
 import kotlin.Pair;
 import org.bukkit.Bukkit;
 
-final class BotActionScheduler {
+public final class BotActionScheduler {
     private BotActionScheduler() {
     }
 
-    static void schedule(MahjongTableSession session) {
+    public static void schedule(MahjongTableSession session) {
         RiichiRoundEngine engine = session.engine();
         if (engine == null || !engine.getStarted()) {
             return;
@@ -201,3 +202,4 @@ final class BotActionScheduler {
         return Character.digit(name.charAt(1), 10);
     }
 }
+

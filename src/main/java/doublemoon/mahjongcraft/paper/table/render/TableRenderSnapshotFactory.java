@@ -1,14 +1,15 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.render;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.bukkit.Location;
 
-final class TableRenderSnapshotFactory {
-    MahjongTableSession.RenderSnapshot create(MahjongTableSession session, long version, long cancellationNonce) {
+public final class TableRenderSnapshotFactory {
+    public MahjongTableSession.RenderSnapshot create(MahjongTableSession session, long version, long cancellationNonce) {
         Location tableCenter = session.center();
         EnumMap<SeatWind, MahjongTableSession.SeatRenderSnapshot> seats = new EnumMap<>(SeatWind.class);
         for (SeatWind wind : SeatWind.values()) {
@@ -66,3 +67,4 @@ final class TableRenderSnapshotFactory {
         );
     }
 }
+

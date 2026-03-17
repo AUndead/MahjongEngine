@@ -8,7 +8,7 @@ import doublemoon.mahjongcraft.paper.render.display.DisplayEntities;
 import doublemoon.mahjongcraft.paper.render.layout.DiscardLayout;
 import doublemoon.mahjongcraft.paper.render.layout.TableRenderLayout;
 import doublemoon.mahjongcraft.paper.render.layout.WallLayout;
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
 import java.util.ArrayList;
 import java.util.List;
@@ -1687,3 +1687,4 @@ public final class TableRenderer {
     private record DeadWallPlacement(Location location, float yaw) {
     }
 }
+

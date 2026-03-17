@@ -1,0 +1,243 @@
+package doublemoon.mahjongcraft.paper.table.core;
+
+import doublemoon.mahjongcraft.paper.model.SeatWind;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+final class TableParticipantRegistry {
+    private final List<UUID> seats = new ArrayList<>(Collections.nCopies(4, null));
+    private final Set<UUID> spectators = new LinkedHashSet<>();
+    private final Map<UUID, String> botNames = new LinkedHashMap<>();
+    private final Set<UUID> readyPlayers = new LinkedHashSet<>();
+    private final Set<UUID> leaveAfterRoundPlayers = new LinkedHashSet<>();
+    private int nextBotNumber = 1;
+
+    boolean addPlayer(UUID playerId, SeatWind wind) {
+        if (playerId == null || wind == null || this.seats.contains(playerId) || this.seats.get(wind.index()) != null || this.size() >= 4) {
+            return false;
+        }
+        this.spectators.remove(playerId);
+        this.seats.set(wind.index(), playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
+        this.readyPlayers.remove(playerId);
+        return true;
+    }
+
+    boolean addSpectator(UUID playerId, boolean spectateAllowed) {
+        if (!spectateAllowed || playerId == null || this.seats.contains(playerId) || this.spectators.contains(playerId)) {
+            return false;
+        }
+        this.spectators.add(playerId);
+        return true;
+    }
+
+    boolean removeSpectator(UUID playerId) {
+        return this.spectators.remove(playerId);
+    }
+
+    UUID createNextBotId(String tableId) {
+        UUID botId;
+        do {
+            botId = UUID.nameUUIDFromBytes((tableId + "-bot-" + this.nextBotNumber).getBytes(StandardCharsets.UTF_8));
+            this.nextBotNumber++;
+        } while (this.seats.contains(botId));
+        return botId;
+    }
+
+    boolean addBot(UUID botId) {
+        SeatWind emptySeat = this.firstEmptySeat();
+        if (botId == null || emptySeat == null) {
+            return false;
+        }
+        this.seats.set(emptySeat.index(), botId);
+        this.botNames.put(botId, "Bot-" + this.botNames.size());
+        this.readyPlayers.add(botId);
+        this.leaveAfterRoundPlayers.remove(botId);
+        return true;
+    }
+
+    UUID removeLastBot() {
+        for (int i = this.seats.size() - 1; i >= 0; i--) {
+            UUID playerId = this.seats.get(i);
+            if (playerId != null && this.botNames.containsKey(playerId)) {
+                this.seats.set(i, null);
+                this.botNames.remove(playerId);
+                this.readyPlayers.remove(playerId);
+                this.leaveAfterRoundPlayers.remove(playerId);
+                return playerId;
+            }
+        }
+        return null;
+    }
+
+    boolean removePlayer(UUID playerId) {
+        this.botNames.remove(playerId);
+        this.readyPlayers.remove(playerId);
+        this.leaveAfterRoundPlayers.remove(playerId);
+        int seatIndex = this.seats.indexOf(playerId);
+        if (seatIndex < 0) {
+            return false;
+        }
+        this.seats.set(seatIndex, null);
+        return true;
+    }
+
+    boolean contains(UUID playerId) {
+        return this.seats.contains(playerId);
+    }
+
+    boolean isEmpty() {
+        return this.size() == 0;
+    }
+
+    int size() {
+        int occupied = 0;
+        for (UUID playerId : this.seats) {
+            if (playerId != null) {
+                occupied++;
+            }
+        }
+        return occupied;
+    }
+
+    int botCount() {
+        return this.botNames.size();
+    }
+
+    int spectatorCount() {
+        return this.spectators.size();
+    }
+
+    List<UUID> players() {
+        return this.seats.stream().filter(java.util.Objects::nonNull).toList();
+    }
+
+    Set<UUID> spectators() {
+        return Set.copyOf(this.spectators);
+    }
+
+    UUID owner() {
+        for (UUID playerId : this.seats) {
+            if (playerId != null) {
+                return playerId;
+            }
+        }
+        return null;
+    }
+
+    boolean isReady(UUID playerId) {
+        return playerId != null && (this.botNames.containsKey(playerId) || this.readyPlayers.contains(playerId));
+    }
+
+    int readyCount() {
+        int ready = 0;
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.isReady(playerId)) {
+                ready++;
+            }
+        }
+        return ready;
+    }
+
+    boolean toggleReady(UUID playerId) {
+        if (this.readyPlayers.contains(playerId)) {
+            this.readyPlayers.remove(playerId);
+            return false;
+        }
+        this.readyPlayers.add(playerId);
+        return true;
+    }
+
+    boolean isQueuedToLeave(UUID playerId) {
+        return playerId != null && this.leaveAfterRoundPlayers.contains(playerId);
+    }
+
+    void queueLeave(UUID playerId) {
+        this.leaveAfterRoundPlayers.add(playerId);
+    }
+
+    boolean hasQueuedLeaves() {
+        return !this.leaveAfterRoundPlayers.isEmpty();
+    }
+
+    Set<UUID> queuedLeavePlayers() {
+        return Set.copyOf(this.leaveAfterRoundPlayers);
+    }
+
+    void removeQueuedLeaves(List<UUID> removedPlayerIds) {
+        this.leaveAfterRoundPlayers.removeAll(removedPlayerIds);
+    }
+
+    boolean isBot(UUID playerId) {
+        return this.botNames.containsKey(playerId);
+    }
+
+    UUID playerAt(SeatWind wind) {
+        return this.seats.get(wind.index());
+    }
+
+    SeatWind firstEmptySeat() {
+        for (SeatWind wind : SeatWind.values()) {
+            if (this.seats.get(wind.index()) == null) {
+                return wind;
+            }
+        }
+        return null;
+    }
+
+    List<UUID> seatIds() {
+        return this.seats;
+    }
+
+    Set<UUID> spectatorIds() {
+        return this.spectators;
+    }
+
+    String botDisplayNameSource(UUID playerId) {
+        return this.botNames.get(playerId);
+    }
+
+    int seatIndexOf(UUID playerId) {
+        return this.seats.indexOf(playerId);
+    }
+
+    void clearReadyPlayers() {
+        this.readyPlayers.clear();
+    }
+
+    void readyBotsOnly() {
+        this.readyPlayers.clear();
+        for (UUID playerId : this.seats) {
+            if (playerId != null && this.botNames.containsKey(playerId)) {
+                this.readyPlayers.add(playerId);
+            }
+        }
+    }
+
+    void clearLeaveQueue() {
+        this.leaveAfterRoundPlayers.clear();
+    }
+
+    void clearSpectators() {
+        this.spectators.clear();
+    }
+
+    void clearBotNames() {
+        this.botNames.clear();
+    }
+
+    void clearSeats() {
+        Collections.fill(this.seats, null);
+    }
+
+    void resetBotCounter() {
+        this.nextBotNumber = 1;
+    }
+}

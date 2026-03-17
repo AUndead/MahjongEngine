@@ -5,7 +5,7 @@ import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.render.display.DisplayEntities;
 import doublemoon.mahjongcraft.paper.render.scene.MeldView;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoringStick;
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -728,3 +728,4 @@ public final class TableRenderLayout {
     private record DeadWallPlacement(Point point, float yaw) {
     }
 }
+

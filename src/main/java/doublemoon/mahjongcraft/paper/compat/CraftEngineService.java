@@ -6,7 +6,7 @@ import doublemoon.mahjongcraft.paper.model.MahjongTile;
 import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction;
 import doublemoon.mahjongcraft.paper.render.display.DisplayVisibilityRegistry;
 import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
-import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
@@ -1023,3 +1023,4 @@ public final class CraftEngineService {
     ) {
     }
 }
+

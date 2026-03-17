@@ -6,7 +6,7 @@ import doublemoon.mahjongcraft.paper.riichi.RoundResolution;
 import doublemoon.mahjongcraft.paper.riichi.model.RankedScoreItem;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreSettlement;
 import doublemoon.mahjongcraft.paper.riichi.model.YakuSettlement;
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -337,3 +337,4 @@ public final class SettlementUi {
         }
     }
 }
+

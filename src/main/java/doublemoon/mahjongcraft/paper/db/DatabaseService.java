@@ -9,7 +9,7 @@ import doublemoon.mahjongcraft.paper.riichi.model.MahjongRule;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreItem;
 import doublemoon.mahjongcraft.paper.riichi.model.ScoreSettlement;
 import doublemoon.mahjongcraft.paper.riichi.model.YakuSettlement;
-import doublemoon.mahjongcraft.paper.table.MahjongTableSession;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.net.ConnectException;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -647,3 +647,4 @@ public final class DatabaseService {
         }
     }
 }
+

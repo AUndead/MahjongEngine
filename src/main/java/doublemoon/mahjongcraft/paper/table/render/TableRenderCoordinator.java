@@ -1,8 +1,9 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.render;
 
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import org.bukkit.Bukkit;
 
-final class TableRenderCoordinator {
+public final class TableRenderCoordinator {
     private static final long DISPLAY_RESTORE_CHECK_INTERVAL_TICKS = 60L;
 
     private final MahjongTableSession session;
@@ -13,11 +14,11 @@ final class TableRenderCoordinator {
     private long nextDisplayRestoreCheckTick;
     private MahjongTableSession.RenderSnapshot pendingRenderSnapshot;
 
-    TableRenderCoordinator(MahjongTableSession session) {
+    public TableRenderCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void render() {
+    public void render() {
         this.session.prepareRenderRequest();
         if (this.renderFlushScheduled) {
             return;
@@ -26,19 +27,19 @@ final class TableRenderCoordinator {
         Bukkit.getScheduler().runTask(this.session.plugin(), this::flushRender);
     }
 
-    void clearDisplays() {
+    public void clearDisplays() {
         this.invalidatePendingRenderPrecompute();
         this.nextDisplayRestoreCheckTick = 0L;
         this.session.clearRenderDisplays();
     }
 
-    void shutdown() {
+    public void shutdown() {
         this.invalidatePendingRenderPrecompute();
         this.renderFlushScheduled = false;
         this.nextDisplayRestoreCheckTick = 0L;
     }
 
-    void restoreDisplaysIfNeeded() {
+    public void restoreDisplaysIfNeeded() {
         if (!this.session.hasRegionDisplays() || this.renderFlushScheduled || this.renderPrecomputeRunning) {
             return;
         }
@@ -108,3 +109,4 @@ final class TableRenderCoordinator {
         this.renderPrecomputeRunning = false;
     }
 }
+

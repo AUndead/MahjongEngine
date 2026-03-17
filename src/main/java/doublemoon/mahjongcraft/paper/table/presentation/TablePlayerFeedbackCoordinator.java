@@ -1,7 +1,7 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.presentation;
 
 import doublemoon.mahjongcraft.paper.riichi.ReactionOptions;
-import doublemoon.mahjongcraft.paper.table.presentation.SettlementFeedbackGate;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,18 +17,18 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
-final class TablePlayerFeedbackCoordinator {
+public final class TablePlayerFeedbackCoordinator {
     private final MahjongTableSession session;
     private final Map<UUID, String> feedbackState = new HashMap<>();
     private String lastSettlementFingerprint = "";
     private String lastPersistedSettlementFingerprint = "";
     private String lastPersistedRankFingerprint = "";
 
-    TablePlayerFeedbackCoordinator(MahjongTableSession session) {
+    public TablePlayerFeedbackCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void sync() {
+    public void sync() {
         if (this.session.engine() == null) {
             this.resetState();
             return;
@@ -45,17 +45,17 @@ final class TablePlayerFeedbackCoordinator {
         this.syncSeatFeedbackStates();
     }
 
-    void clearPlayerState(UUID playerId) {
+    public void clearPlayerState(UUID playerId) {
         this.feedbackState.remove(playerId);
     }
 
-    void resetForRoundStart() {
+    public void resetForRoundStart() {
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
         this.lastPersistedRankFingerprint = "";
     }
 
-    void resetState() {
+    public void resetState() {
         this.feedbackState.clear();
         this.lastSettlementFingerprint = "";
         this.lastPersistedSettlementFingerprint = "";
@@ -260,3 +260,4 @@ final class TablePlayerFeedbackCoordinator {
         }
     }
 }
+

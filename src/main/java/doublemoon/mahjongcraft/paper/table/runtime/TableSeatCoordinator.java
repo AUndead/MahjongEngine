@@ -1,10 +1,12 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
 import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction;
 import doublemoon.mahjongcraft.paper.render.display.DisplayClickAction.ActionType;
 import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableManager;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,7 +20,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
-final class TableSeatCoordinator {
+public final class TableSeatCoordinator {
     private static final long SEAT_WATCHDOG_PERIOD_TICKS = 2L;
     private static final long SEAT_WATCHDOG_DURATION_TICKS = 40L;
     private static final long SEAT_RESTORE_COOLDOWN_MILLIS = 150L;
@@ -30,12 +32,12 @@ final class TableSeatCoordinator {
     private final Set<UUID> seatDismountBypass = new HashSet<>();
     private BukkitTask seatWatchdogTask;
 
-    TableSeatCoordinator(MahjongPaperPlugin plugin, MahjongTableManager tableManager) {
+    public TableSeatCoordinator(MahjongPaperPlugin plugin, MahjongTableManager tableManager) {
         this.plugin = plugin;
         this.tableManager = tableManager;
     }
 
-    void shutdown() {
+    public void shutdown() {
         if (this.seatWatchdogTask != null) {
             this.seatWatchdogTask.cancel();
             this.seatWatchdogTask = null;
@@ -45,7 +47,7 @@ final class TableSeatCoordinator {
         this.seatDismountBypass.clear();
     }
 
-    DisplayClickAction seatAction(Entity entity) {
+    public DisplayClickAction seatAction(Entity entity) {
         if (entity == null || this.plugin.craftEngine() == null) {
             return null;
         }
@@ -68,11 +70,11 @@ final class TableSeatCoordinator {
         };
     }
 
-    boolean consumeDismountBypass(UUID playerId) {
+    public boolean consumeDismountBypass(UUID playerId) {
         return playerId != null && this.seatDismountBypass.remove(playerId);
     }
 
-    void ejectSeatOccupant(UUID playerId) {
+    public void ejectSeatOccupant(UUID playerId) {
         if (playerId == null) {
             return;
         }
@@ -88,7 +90,7 @@ final class TableSeatCoordinator {
         player.leaveVehicle();
     }
 
-    void requestSeatRestore(Player player, MahjongTableSession session, SeatWind wind) {
+    public void requestSeatRestore(Player player, MahjongTableSession session, SeatWind wind) {
         if (player == null || session == null || wind == null || this.plugin.craftEngine() == null) {
             return;
         }
@@ -115,7 +117,7 @@ final class TableSeatCoordinator {
         });
     }
 
-    void movePlayerToSeatExit(UUID playerId, MahjongTableSession session, SeatWind wind) {
+    public void movePlayerToSeatExit(UUID playerId, MahjongTableSession session, SeatWind wind) {
         if (playerId == null || session == null || wind == null) {
             return;
         }
@@ -143,11 +145,11 @@ final class TableSeatCoordinator {
         });
     }
 
-    void startSeatWatchdog(MahjongTableSession session) {
+    public void startSeatWatchdog(MahjongTableSession session) {
         this.startSeatWatchdog(session, SEAT_WATCHDOG_DURATION_TICKS);
     }
 
-    void startSeatWatchdog(MahjongTableSession session, long durationTicks) {
+    public void startSeatWatchdog(MahjongTableSession session, long durationTicks) {
         if (session == null || durationTicks <= 0L) {
             return;
         }
@@ -160,11 +162,11 @@ final class TableSeatCoordinator {
         }
     }
 
-    void startSeatWatchdog(MahjongTableSession session, UUID playerId, SeatWind wind) {
+    public void startSeatWatchdog(MahjongTableSession session, UUID playerId, SeatWind wind) {
         this.startSeatWatchdog(session, playerId, wind, SEAT_WATCHDOG_DURATION_TICKS);
     }
 
-    void startSeatWatchdog(MahjongTableSession session, UUID playerId, SeatWind wind, long durationTicks) {
+    public void startSeatWatchdog(MahjongTableSession session, UUID playerId, SeatWind wind, long durationTicks) {
         if (session == null || playerId == null || wind == null || durationTicks <= 0L) {
             return;
         }
@@ -272,3 +274,4 @@ final class TableSeatCoordinator {
     private record SeatWatchdogBinding(String tableId, SeatWind wind, long expiresAtTick) {
     }
 }
+

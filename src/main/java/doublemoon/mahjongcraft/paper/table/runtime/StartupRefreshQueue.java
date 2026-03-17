@@ -1,4 +1,4 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
 import java.util.ArrayDeque;
 import java.util.HashSet;
@@ -37,3 +37,4 @@ final class StartupRefreshQueue {
         this.queue.clear();
     }
 }
+

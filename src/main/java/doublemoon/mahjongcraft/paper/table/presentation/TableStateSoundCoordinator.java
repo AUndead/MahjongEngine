@@ -1,22 +1,23 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.presentation;
 
 import doublemoon.mahjongcraft.paper.riichi.ReactionResponse;
 import doublemoon.mahjongcraft.paper.riichi.ReactionType;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.Objects;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 
-final class TableStateSoundCoordinator {
+public final class TableStateSoundCoordinator {
     private final MahjongTableSession session;
     private String lastTurnSoundFingerprint = "";
     private String lastRiichiSoundFingerprint = "";
     private String lastResolutionSoundFingerprint = "";
 
-    TableStateSoundCoordinator(MahjongTableSession session) {
+    public TableStateSoundCoordinator(MahjongTableSession session) {
         this.session = session;
     }
 
-    void syncStateSounds() {
+    public void syncStateSounds() {
         if (this.session.engine() == null) {
             this.reset();
             return;
@@ -26,23 +27,23 @@ final class TableStateSoundCoordinator {
         this.syncResolutionSound();
     }
 
-    void playReactionSound(ReactionResponse response) {
+    public void playReactionSound(ReactionResponse response) {
         if (response.getType() == ReactionType.CHII) {
             this.broadcastSound(Sound.ENTITY_PLAYER_BURP, 0.85F, 1.15F);
         }
     }
 
-    void playRoundStartSound() {
+    public void playRoundStartSound() {
         this.broadcastSound(Sound.BLOCK_BEACON_POWER_SELECT, 0.9F, 1.2F);
     }
 
-    void reset() {
+    public void reset() {
         this.lastTurnSoundFingerprint = "";
         this.lastRiichiSoundFingerprint = "";
         this.lastResolutionSoundFingerprint = "";
     }
 
-    void resetForRoundStart() {
+    public void resetForRoundStart() {
         this.lastResolutionSoundFingerprint = "";
     }
 
@@ -81,3 +82,4 @@ final class TableStateSoundCoordinator {
         }
     }
 }
+

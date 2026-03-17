@@ -9,7 +9,7 @@ import doublemoon.mahjongcraft.paper.i18n.MessageService;
 import doublemoon.mahjongcraft.paper.render.display.DisplayVisibilityRegistry;
 import doublemoon.mahjongcraft.paper.render.display.TableDisplayRegistry;
 import doublemoon.mahjongcraft.paper.runtime.AsyncService;
-import doublemoon.mahjongcraft.paper.table.MahjongTableManager;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableManager;
 import java.util.Objects;
 import java.util.logging.Level;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -134,3 +134,4 @@ public final class MahjongPaperPlugin extends JavaPlugin {
         return this.tableManager;
     }
 }
+

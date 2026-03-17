@@ -1,6 +1,8 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.runtime;
 
 import doublemoon.mahjongcraft.paper.bootstrap.MahjongPaperPlugin;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableManager;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -10,7 +12,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.scheduler.BukkitTask;
 
-final class TableRefreshCoordinator {
+public final class TableRefreshCoordinator {
     private static final int CHUNK_REFRESH_BATCH_SIZE = 1;
 
     private final MahjongPaperPlugin plugin;
@@ -23,14 +25,14 @@ final class TableRefreshCoordinator {
     private BukkitTask startupRefreshTask;
     private BukkitTask chunkRefreshTask;
 
-    TableRefreshCoordinator(MahjongPaperPlugin plugin, MahjongTableManager tableManager, TableSeatCoordinator seatCoordinator, int startupRebuildBatchSize) {
+    public TableRefreshCoordinator(MahjongPaperPlugin plugin, MahjongTableManager tableManager, TableSeatCoordinator seatCoordinator, int startupRebuildBatchSize) {
         this.plugin = plugin;
         this.tableManager = tableManager;
         this.seatCoordinator = seatCoordinator;
         this.startupRebuildBatchSize = Math.max(1, startupRebuildBatchSize);
     }
 
-    void shutdown() {
+    public void shutdown() {
         if (this.startupRefreshTask != null) {
             this.startupRefreshTask.cancel();
             this.startupRefreshTask = null;
@@ -44,21 +46,21 @@ final class TableRefreshCoordinator {
         this.chunkRefreshQueue.clear();
     }
 
-    void markPendingArtifactCleanup(String tableId) {
+    public void markPendingArtifactCleanup(String tableId) {
         if (tableId == null) {
             return;
         }
         this.pendingArtifactCleanupTableIds.add(tableId);
     }
 
-    void clearPendingArtifactCleanup(String tableId) {
+    public void clearPendingArtifactCleanup(String tableId) {
         if (tableId == null) {
             return;
         }
         this.pendingArtifactCleanupTableIds.remove(tableId);
     }
 
-    void cleanupLoadedTableArtifactsIfNeeded(MahjongTableSession session) {
+    public void cleanupLoadedTableArtifactsIfNeeded(MahjongTableSession session) {
         if (session == null || !this.pendingArtifactCleanupTableIds.remove(session.id())) {
             return;
         }
@@ -66,11 +68,11 @@ final class TableRefreshCoordinator {
         this.plugin.debug().log("table", "Deferred startup cleanup finished for persistent table " + session.id());
     }
 
-    void enqueueStartupRefresh(String tableId) {
+    public void enqueueStartupRefresh(String tableId) {
         this.startupRefreshQueue.enqueue(tableId);
     }
 
-    void enqueueStartupRefresh(Collection<MahjongTableSession> sessions) {
+    public void enqueueStartupRefresh(Collection<MahjongTableSession> sessions) {
         if (sessions == null) {
             return;
         }
@@ -81,7 +83,7 @@ final class TableRefreshCoordinator {
         }
     }
 
-    void scheduleStartupRefreshTask() {
+    public void scheduleStartupRefreshTask() {
         if (this.startupRefreshQueue.isEmpty()) {
             return;
         }
@@ -91,7 +93,7 @@ final class TableRefreshCoordinator {
         this.startupRefreshTask = Bukkit.getScheduler().runTaskTimer(this.plugin, this::processStartupRefreshBatch, 1L, 1L);
     }
 
-    void handleChunkLoad(Chunk chunk, Collection<String> candidateTableIds) {
+    public void handleChunkLoad(Chunk chunk, Collection<String> candidateTableIds) {
         if (chunk == null || candidateTableIds == null || candidateTableIds.isEmpty()) {
             return;
         }
@@ -201,3 +203,4 @@ final class TableRefreshCoordinator {
         return TableAreaChunks.allLoaded(world.getUID(), centerChunkX, centerChunkZ, loadedChunks);
     }
 }
+

@@ -1,19 +1,20 @@
-package doublemoon.mahjongcraft.paper.table;
+package doublemoon.mahjongcraft.paper.table.render;
 
 import doublemoon.mahjongcraft.paper.model.SeatWind;
 import doublemoon.mahjongcraft.paper.render.scene.MeldView;
 import doublemoon.mahjongcraft.paper.render.layout.TableRenderLayout;
+import doublemoon.mahjongcraft.paper.table.core.MahjongTableSession;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-final class TableRegionFingerprintService {
+public final class TableRegionFingerprintService {
     private static final String REGION_TABLE = "table";
     private static final String REGION_WALL = "wall";
     private static final String REGION_DORA = "dora";
     private static final String REGION_CENTER = "center";
 
-    Map<String, String> precomputeRegionFingerprints(MahjongTableSession session, MahjongTableSession.RenderSnapshot snapshot) {
+    public Map<String, String> precomputeRegionFingerprints(MahjongTableSession session, MahjongTableSession.RenderSnapshot snapshot) {
         Map<String, String> fingerprints = new HashMap<>();
         fingerprints.put(REGION_TABLE, this.tableFingerprint(snapshot));
         fingerprints.put(REGION_WALL, this.wallFingerprint(snapshot));
@@ -30,7 +31,7 @@ final class TableRegionFingerprintService {
         return Map.copyOf(fingerprints);
     }
 
-    String handPrivateTileFingerprint(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan, int tileIndex) {
+    public String handPrivateTileFingerprint(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan, int tileIndex) {
         TableRenderLayout.Point point = plan.privateHandPoints().get(tileIndex);
         return fingerprintBuilder(160)
             .field("hand-private-tile")
@@ -47,7 +48,7 @@ final class TableRegionFingerprintService {
             .toString();
     }
 
-    String handPublicTileFingerprint(
+    public String handPublicTileFingerprint(
         MahjongTableSession.RenderSnapshot snapshot,
         MahjongTableSession.SeatRenderSnapshot seat,
         TableRenderLayout.SeatLayoutPlan plan,
@@ -71,7 +72,7 @@ final class TableRegionFingerprintService {
             .toString();
     }
 
-    String discardTileFingerprint(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan, int discardIndex) {
+    public String discardTileFingerprint(MahjongTableSession.SeatRenderSnapshot seat, TableRenderLayout.SeatLayoutPlan plan, int discardIndex) {
         TableRenderLayout.TilePlacement placement = plan.discardPlacements().get(discardIndex);
         return fingerprintBuilder(160)
             .field("discard-tile")
@@ -266,3 +267,4 @@ final class TableRegionFingerprintService {
         }
     }
 }
+
