@@ -530,6 +530,7 @@ public final class MahjongTableSession {
         for (SeatWind wind : SeatWind.values()) {
             SeatRenderSnapshot seat = snapshot.seat(wind);
             TableRenderLayout.SeatLayoutPlan seatPlan = plan.seat(wind);
+            this.updateRegion(this.seatRegionKey("visual", wind), fingerprints.get(this.seatRegionKey("visual", wind)), () -> this.renderer.renderSeatVisual(this, wind));
             this.updateRegion(this.seatRegionKey("labels", wind), fingerprints.get(this.seatRegionKey("labels", wind)), () -> this.renderer.renderSeatLabels(this, seat, seatPlan));
             this.updateRegion(this.seatRegionKey("sticks", wind), fingerprints.get(this.seatRegionKey("sticks", wind)), () -> this.renderer.renderSticks(this, seat, seatPlan));
             this.updatePublicHandRegions(snapshot, seat, seatPlan);
@@ -2314,6 +2315,7 @@ public final class MahjongTableSession {
         fingerprints.put(REGION_CENTER, this.centerFingerprint(snapshot));
         for (SeatWind wind : SeatWind.values()) {
             SeatRenderSnapshot seat = snapshot.seat(wind);
+            fingerprints.put(this.seatRegionKey("visual", wind), this.seatVisualFingerprint(wind));
             fingerprints.put(this.seatRegionKey("labels", wind), this.seatLabelFingerprint(snapshot, seat));
             fingerprints.put(this.seatRegionKey("sticks", wind), this.stickFingerprint(snapshot, seat));
             fingerprints.put(this.seatRegionKey("hand-public", wind), this.handPublicFingerprint(snapshot, seat));
@@ -2377,6 +2379,14 @@ public final class MahjongTableSession {
             .field(seat.riichi())
             .field(seat.ready())
             .field(seat.queuedToLeave())
+            .toString();
+    }
+
+    private String seatVisualFingerprint(SeatWind wind) {
+        return fingerprintBuilder(96)
+            .field("visual")
+            .field(wind.name())
+            .field(Objects.toString(this.plugin.settings().craftEngineSeatFurnitureId(), ""))
             .toString();
     }
 

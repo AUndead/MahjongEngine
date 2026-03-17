@@ -60,6 +60,10 @@ public final class CraftEngineService {
     private final Map<String, Object> craftEngineKeyCache = new ConcurrentHashMap<>();
     private final Map<Class<?>, Method> customItemBuildMethods = new ConcurrentHashMap<>();
     private final Map<Class<?>, Method> furnitureEntityMethods = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Method> furnitureHitboxesMethods = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Method> furniturePositionMethods = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Method> hitboxSeatsMethods = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Method> seatOccupiedMethods = new ConcurrentHashMap<>();
     private final Map<Integer, TrackedCullableEntity> trackedCullableEntities = new ConcurrentHashMap<>();
     private volatile boolean itemReflectionUnavailable;
     private volatile boolean furnitureReflectionUnavailable;
@@ -654,6 +658,50 @@ public final class CraftEngineService {
         }
     }
 
+    public boolean seatPlayerOnFurniture(Entity furnitureEntity, Player player) {
+        if (furnitureEntity == null || player == null || !player.isOnline() || this.furnitureReflectionUnavailable) {
+            return false;
+        }
+        Plugin craftEngine = this.craftEnginePlugin();
+        FurnitureBridge bridge = this.furnitureBridge(craftEngine);
+        if (bridge == null || bridge.loadedFurnitureByMetaEntityMethod() == null || bridge.playerAdaptMethod() == null || bridge.seatSpawnMethod() == null) {
+            return false;
+        }
+        try {
+            Object furniture = bridge.loadedFurnitureByMetaEntityMethod().invoke(null, furnitureEntity);
+            if (furniture == null) {
+                return false;
+            }
+            Object adaptedPlayer = bridge.playerAdaptMethod().invoke(null, player);
+            if (adaptedPlayer == null) {
+                return false;
+            }
+            Object position = this.resolveFurniturePositionMethod(furniture.getClass()).invoke(furniture);
+            Object[] hitboxes = this.asObjectArray(this.resolveFurnitureHitboxesMethod(furniture.getClass()).invoke(furniture));
+            for (Object hitbox : hitboxes) {
+                Object[] seats = this.asObjectArray(this.resolveHitboxSeatsMethod(hitbox.getClass()).invoke(hitbox));
+                for (Object seat : seats) {
+                    Object occupied = this.resolveSeatOccupiedMethod(seat.getClass()).invoke(seat);
+                    if (occupied instanceof Boolean flag && flag) {
+                        continue;
+                    }
+                    Object spawned = bridge.seatSpawnMethod().invoke(seat, adaptedPlayer, position);
+                    if (spawned instanceof Boolean success && success) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            this.furnitureReflectionUnavailable = true;
+            this.plugin.debug().log(
+                "lifecycle",
+                "CraftEngine seat spawn bridge failed: " + exception.getClass().getSimpleName() + ": " + exception.getMessage()
+            );
+            return false;
+        }
+    }
+
     private NamespacedKey resolveFurnitureDataKey(Plugin craftEngine) {
         NamespacedKey cached = this.furnitureDataKey;
         if (cached != null) {
@@ -773,12 +821,43 @@ public final class CraftEngineService {
         return this.furnitureEntityMethods.computeIfAbsent(furnitureInstanceClass, this::lookupFurnitureEntityMethod);
     }
 
+    private Method resolveFurnitureHitboxesMethod(Class<?> furnitureInstanceClass) {
+        return this.furnitureHitboxesMethods.computeIfAbsent(furnitureInstanceClass, ignored -> this.lookupMethod(ignored, "hitboxes"));
+    }
+
+    private Method resolveFurniturePositionMethod(Class<?> furnitureInstanceClass) {
+        return this.furniturePositionMethods.computeIfAbsent(furnitureInstanceClass, ignored -> this.lookupMethod(ignored, "position"));
+    }
+
+    private Method resolveHitboxSeatsMethod(Class<?> hitboxClass) {
+        return this.hitboxSeatsMethods.computeIfAbsent(hitboxClass, ignored -> this.lookupMethod(ignored, "seats"));
+    }
+
+    private Method resolveSeatOccupiedMethod(Class<?> seatClass) {
+        return this.seatOccupiedMethods.computeIfAbsent(seatClass, ignored -> this.lookupMethod(ignored, "isOccupied"));
+    }
+
     private Method lookupFurnitureEntityMethod(Class<?> furnitureInstanceClass) {
         try {
             return furnitureInstanceClass.getMethod("bukkitEntity");
         } catch (NoSuchMethodException exception) {
             throw new IllegalStateException("CraftEngine furniture instance does not expose bukkitEntity(): " + furnitureInstanceClass.getName(), exception);
         }
+    }
+
+    private Method lookupMethod(Class<?> type, String methodName) {
+        try {
+            return type.getMethod(methodName);
+        } catch (NoSuchMethodException exception) {
+            throw new IllegalStateException("CraftEngine class does not expose " + methodName + "(): " + type.getName(), exception);
+        }
+    }
+
+    private Object[] asObjectArray(Object value) {
+        if (value instanceof Object[] array) {
+            return array;
+        }
+        return new Object[0];
     }
 
     private Object craftEngineKey(String key, Method keyOfMethod) throws ReflectiveOperationException {
@@ -831,6 +910,10 @@ public final class CraftEngineService {
             ClassLoader classLoader = craftEngine.getClass().getClassLoader();
             Class<?> keyClass = Class.forName("net.momirealms.craftengine.core.util.Key", true, classLoader);
             Class<?> furnitureClass = Class.forName("net.momirealms.craftengine.bukkit.api.CraftEngineFurniture", true, classLoader);
+            Class<?> adaptorsClass = Class.forName("net.momirealms.craftengine.bukkit.api.BukkitAdaptors", true, classLoader);
+            Class<?> seatClass = Class.forName("net.momirealms.craftengine.core.entity.seat.Seat", true, classLoader);
+            Class<?> cePlayerClass = Class.forName("net.momirealms.craftengine.core.entity.player.Player", true, classLoader);
+            Class<?> worldPositionClass = Class.forName("net.momirealms.craftengine.core.world.WorldPosition", true, classLoader);
             Method removeWithFlagsMethod = null;
             Method removeMethod = null;
             try {
@@ -844,6 +927,9 @@ public final class CraftEngineService {
                 furnitureClass.getMethod("isFurniture", Entity.class),
                 furnitureClass.getMethod("isSeat", Entity.class),
                 furnitureClass.getMethod("getLoadedFurnitureBySeat", Entity.class),
+                furnitureClass.getMethod("getLoadedFurnitureByMetaEntity", Entity.class),
+                adaptorsClass.getMethod("adapt", Player.class),
+                seatClass.getMethod("spawnSeat", cePlayerClass, worldPositionClass),
                 removeMethod,
                 removeWithFlagsMethod
             );
@@ -877,6 +963,9 @@ public final class CraftEngineService {
         Method isFurnitureMethod,
         Method isSeatMethod,
         Method loadedFurnitureBySeatMethod,
+        Method loadedFurnitureByMetaEntityMethod,
+        Method playerAdaptMethod,
+        Method seatSpawnMethod,
         Method removeMethod,
         Method removeWithFlagsMethod
     ) {

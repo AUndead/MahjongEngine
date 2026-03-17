@@ -41,6 +41,7 @@ public final class TableRenderer {
     private static final double FLOATING_TEXT_Y_OFFSET = 1.0D;
     private static final double SEAT_DISTANCE_FROM_HAND_BASE = 0.9D;
     private static final double SEAT_BASE_Y_OFFSET = -0.62D;
+    private static final double SEAT_RAISE_Y_OFFSET = 1.0D;
     private static final double SEAT_ANCHOR_Y_OFFSET = -0.18D;
     private static final double SEAT_INTERACTION_Y_OFFSET = 0.46D;
     private static final double SEAT_BASE_WIDTH = 0.72D;
@@ -280,18 +281,11 @@ public final class TableRenderer {
     }
 
     public List<Entity> renderSeatLabels(MahjongTableSession session, SeatWind wind) {
-        List<Entity> spawned = new ArrayList<>(3);
+        List<Entity> spawned = new ArrayList<>(2);
         Location center = displayCenter(session);
         UUID playerId = session.playerAt(wind);
         Location handBase = handDirectionBase(center, wind);
         boolean active = session.currentSeat() == wind;
-        DisplayClickAction seatAction = null;
-        if (!session.isStarted()) {
-            seatAction = playerId != null
-                ? DisplayClickAction.toggleReady(session.id(), wind)
-                : DisplayClickAction.joinSeat(session.id(), wind);
-        }
-        spawned.addAll(renderSeatVisual(session, wind, handBase, seatAction));
 
         spawned.add(DisplayEntities.spawnLabel(
             session.plugin(),
@@ -315,8 +309,24 @@ public final class TableRenderer {
                 0.0F,
                 false
             ));
+            if (!session.isStarted()) {
+                spawned.add(DisplayEntities.spawnInteraction(
+                    session.plugin(),
+                    seatInteractionLocation(handBase, wind),
+                    SEAT_INTERACTION_WIDTH,
+                    SEAT_INTERACTION_HEIGHT,
+                    DisplayClickAction.toggleReady(session.id(), wind),
+                    null
+                ));
+            }
         }
         return spawned;
+    }
+
+    public List<Entity> renderSeatVisual(MahjongTableSession session, SeatWind wind) {
+        Location center = displayCenter(session);
+        Location handBase = handDirectionBase(center, wind);
+        return renderSeatVisual(session, wind, handBase, DisplayClickAction.joinSeat(session.id(), wind));
     }
 
     public List<Entity> renderSeatLabels(
@@ -324,15 +334,8 @@ public final class TableRenderer {
         MahjongTableSession.SeatRenderSnapshot seat,
         TableRenderLayout.SeatLayoutPlan plan
     ) {
-        List<Entity> spawned = new ArrayList<>(3);
+        List<Entity> spawned = new ArrayList<>(2);
         boolean active = seat.wind() == session.currentSeat();
-        DisplayClickAction seatAction = null;
-        if (!session.isStarted()) {
-            seatAction = seat.playerId() != null
-                ? DisplayClickAction.toggleReady(session.id(), seat.wind())
-                : DisplayClickAction.joinSeat(session.id(), seat.wind());
-        }
-        spawned.addAll(renderSeatVisual(session, seat.wind(), toLocation(session, plan.handBase()), seatAction));
 
         spawned.add(DisplayEntities.spawnLabel(
             session.plugin(),
@@ -356,6 +359,16 @@ public final class TableRenderer {
                 0.0F,
                 false
             ));
+            if (!session.isStarted()) {
+                spawned.add(DisplayEntities.spawnInteraction(
+                    session.plugin(),
+                    toLocation(session, plan.interactionLocation()),
+                    SEAT_INTERACTION_WIDTH,
+                    SEAT_INTERACTION_HEIGHT,
+                    DisplayClickAction.toggleReady(session.id(), seat.wind()),
+                    null
+                ));
+            }
         }
         return spawned;
     }
@@ -839,7 +852,7 @@ public final class TableRenderer {
 
     private static Location seatBaseLocation(Location handBase, SeatWind wind) {
         Offset forward = offsetTowardSeatFront(wind, SEAT_DISTANCE_FROM_HAND_BASE);
-        return handBase.clone().add(forward.x(), SEAT_BASE_Y_OFFSET, forward.z());
+        return handBase.clone().add(forward.x(), SEAT_BASE_Y_OFFSET + SEAT_RAISE_Y_OFFSET, forward.z());
     }
 
     private static List<Entity> renderSeatVisual(
@@ -850,7 +863,7 @@ public final class TableRenderer {
     ) {
         String seatFurnitureId = configuredSeatFurnitureId(session);
         if (seatFurnitureId != null) {
-            Entity furniture = spawnSeatFurniture(session, seatBaseLocation(handBase, wind), seatFurnitureId, action);
+            Entity furniture = spawnSeatFurniture(session, seatBaseLocation(handBase, wind), wind, seatFurnitureId, action);
             return furniture == null ? List.of() : List.of(furniture);
         }
 
@@ -875,19 +888,24 @@ public final class TableRenderer {
             (float) SEAT_BACKREST_DEPTH
         ));
         if (action != null) {
-            spawned.add(spawnSeatInteraction(session, seatInteractionLocation(handBase, wind), action));
+            spawned.add(spawnSeatInteraction(session, seatInteractionLocation(handBase, wind), wind, action));
         }
         return spawned;
     }
 
-    private static Entity spawnSeatInteraction(MahjongTableSession session, Location location, DisplayClickAction action) {
-        Entity furnitureHitbox = session.plugin().craftEngine().placeSeatHitbox(location, action);
+    private static Entity spawnSeatInteraction(
+        MahjongTableSession session,
+        Location location,
+        SeatWind wind,
+        DisplayClickAction action
+    ) {
+        Entity furnitureHitbox = session.plugin().craftEngine().placeSeatHitbox(seatPlacementLocation(location, wind), action);
         if (furnitureHitbox != null) {
             return furnitureHitbox;
         }
         return DisplayEntities.spawnInteraction(
             session.plugin(),
-            location,
+            seatPlacementLocation(location, wind),
             SEAT_INTERACTION_WIDTH,
             SEAT_INTERACTION_HEIGHT,
             action,
@@ -898,13 +916,21 @@ public final class TableRenderer {
     private static Entity spawnSeatFurniture(
         MahjongTableSession session,
         Location location,
+        SeatWind wind,
         String furnitureId,
         DisplayClickAction action
     ) {
         if (session.plugin().craftEngine() == null || furnitureId == null || furnitureId.isBlank()) {
             return null;
         }
-        return session.plugin().craftEngine().placeSeatFurniture(location, furnitureId, action);
+        return session.plugin().craftEngine().placeSeatFurniture(seatPlacementLocation(location, wind), furnitureId, action);
+    }
+
+    private static Location seatPlacementLocation(Location location, SeatWind wind) {
+        Location placed = location.clone();
+        placed.setYaw(seatYaw(wind) + 180.0F);
+        placed.setPitch(0.0F);
+        return placed;
     }
 
     private static String configuredSeatFurnitureId(MahjongTableSession session) {

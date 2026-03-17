@@ -420,6 +420,7 @@ public final class MahjongTableManager implements Listener {
         MahjongTableSession session = this.join(player, action.tableId(), action.seatWind());
         if (session != null) {
             this.plugin.messages().send(player, "command.joined_table", this.plugin.messages().tag("table_id", session.id()));
+            this.scheduleSeatRestore(player, session, action.seatWind());
             return;
         }
         event.setCancelled(true);
@@ -637,6 +638,51 @@ public final class MahjongTableManager implements Listener {
         }
         this.seatDismountBypass.add(playerId);
         player.leaveVehicle();
+    }
+
+    private void scheduleSeatRestore(Player player, MahjongTableSession session, SeatWind wind) {
+        if (player == null || session == null || wind == null) {
+            return;
+        }
+        Bukkit.getScheduler().runTask(this.plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            if (this.tableFor(player.getUniqueId()) != session) {
+                return;
+            }
+            if (player.isInsideVehicle()) {
+                return;
+            }
+            Entity furniture = this.findSeatFurniture(session, wind);
+            if (furniture != null) {
+                this.plugin.craftEngine().seatPlayerOnFurniture(furniture, player);
+            }
+        });
+    }
+
+    private Entity findSeatFurniture(MahjongTableSession session, SeatWind wind) {
+        if (session == null || wind == null || this.plugin.craftEngine() == null) {
+            return null;
+        }
+        Location anchor = session.seatAnchorLocation(wind);
+        World world = anchor.getWorld();
+        if (world == null) {
+            return null;
+        }
+        for (Entity entity : world.getNearbyEntities(anchor, 1.6D, 1.6D, 1.6D)) {
+            if (!this.plugin.craftEngine().isFurnitureEntity(entity)) {
+                continue;
+            }
+            DisplayClickAction action = TableDisplayRegistry.get(entity.getEntityId());
+            if (action == null || !session.id().equals(action.tableId()) || action.seatWind() != wind) {
+                continue;
+            }
+            if (action.actionType() == ActionType.JOIN_SEAT || action.actionType() == ActionType.TOGGLE_READY) {
+                return entity;
+            }
+        }
+        return null;
     }
 
     private DisplayClickAction seatAction(Entity entity) {
