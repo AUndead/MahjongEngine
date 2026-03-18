@@ -1,11 +1,7 @@
 name: Test
 
 on:
-  push:
-    branches:
-      - main
-      - virtual-threads
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
