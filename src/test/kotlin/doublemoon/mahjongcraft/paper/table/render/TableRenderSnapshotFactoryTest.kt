@@ -32,7 +32,6 @@ class TableRenderSnapshotFactoryTest {
         `when`(session.center()).thenReturn(Location(null, 0.0, 64.0, 0.0))
         `when`(session.viewers()).thenReturn(listOf(eastViewer, southViewer))
         `when`(session.isStarted()).thenReturn(false)
-        `when`(session.isRoundFinished()).thenReturn(false)
         `when`(session.remainingWall()).thenReturn(emptyList())
         `when`(session.kanCount()).thenReturn(0)
         `when`(session.dicePoints()).thenReturn(0)
