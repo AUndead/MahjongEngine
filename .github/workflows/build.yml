@@ -14,23 +14,9 @@ jobs:
   build-platform:
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            artifact: linux
-            gradle: ./gradlew
-            needs_chmod: true
-          - os: windows-latest
-            platform: windows-x86_64
-            artifact: windows
-            gradle: .\gradlew.bat
-            needs_chmod: false
-          - os: macos-15-intel
-            platform: macos-x86_64
-            artifact: macos
-            gradle: ./gradlew
-            needs_chmod: true
+      matrix: ${{ fromJson(github.ref == 'refs/heads/main'
+        && '{"include":[{"os":"ubuntu-latest","platform":"linux-x86_64","artifact":"linux","gradle":"./gradlew","needs_chmod":true}]}'
+        || '{"include":[{"os":"ubuntu-latest","platform":"linux-x86_64","artifact":"linux","gradle":"./gradlew","needs_chmod":true},{"os":"windows-latest","platform":"windows-x86_64","artifact":"windows","gradle":".\\gradlew.bat","needs_chmod":false},{"os":"macos-15-intel","platform":"macos-x86_64","artifact":"macos","gradle":"./gradlew","needs_chmod":true}]}') }}
 
     runs-on: ${{ matrix.os }}
 
@@ -79,6 +65,7 @@ jobs:
 
   package-universal:
     needs: build-platform
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
